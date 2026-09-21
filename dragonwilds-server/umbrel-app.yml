@@ -2,7 +2,7 @@ manifestVersion: 1
 id: dragonwilds-server
 category: networking
 name: RuneScape Dragonwilds Server
-version: "0.1.0"
+version: "0.1.1"
 tagline: Tu mundo persistente, administrado desde Umbrel
 description: >-
   Ejecuta y administra un servidor dedicado de RuneScape: Dragonwilds desde una
@@ -19,7 +19,10 @@ description: >-
   almacenamiento. El servidor oficial de Jagex no publica actualmente un
   runtime arm64. El modo WireGuard necesita `/dev/net/tun` y capacidades de red
   dentro del contenedor; no se monta el socket Docker del host.
-releaseNotes: ""
+releaseNotes: >-
+  Editor visual de dificultad (Historia, Normal, Difícil), control de fuego amigo
+  (JcJ/Cooperativo), selección y activación directa de mundos detectados con 1 clic
+  y descarga de partidas .sav desde el navegador.
 
 developer: Dragonwilds Community
 website: https://dragonwilds.runescape.com/news/how-to-dedicated-servers

@@ -111,18 +111,102 @@
         </section>
 
         <section id="page-world" class="page">
-          <div class="page-intro"><div><h3>Mundo, JcJ y dificultad</h3><p>Dragonwilds guarda las reglas personalizadas dentro del archivo del mundo, no en <code>DedicatedServer.ini</code>.</p></div></div>
+          <div class="page-intro">
+            <div>
+              <h3>Mundo, JcJ y dificultad</h3>
+              <p>Dragonwilds guarda las reglas dentro del archivo del mundo. Configura la dificultad y fuego amigo o cambia de mundo.</p>
+            </div>
+          </div>
+
+          <article class="panel" id="world-rules-panel" style="margin-bottom: 1.5rem;">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">REGLAS Y DIFICULTAD</p>
+                <h3 id="rules-card-title">Mundo: <span id="rules-target-world">—</span></h3>
+              </div>
+              <span id="rules-active-badge" class="status-badge online">ACTIVO</span>
+            </div>
+
+            <form id="world-rules-form" style="margin-top: 1.2rem;">
+              <input type="hidden" id="rules-world-input" name="targetWorld" value="" />
+              <div class="form-grid">
+                <div>
+                  <label><span>Dificultad de la partida</span></label>
+                  <div class="difficulty-selector">
+                    <label class="radio-card">
+                      <input type="radio" name="difficulty" value="0" />
+                      <div>
+                        <b>🛡️ Historia / Fácil</b>
+                        <small>Combate accesible y penalización reducida. Ideal para explorar y construir.</small>
+                      </div>
+                    </label>
+                    <label class="radio-card">
+                      <input type="radio" name="difficulty" value="1" />
+                      <div>
+                        <b>⚔️ Normal</b>
+                        <small>La experiencia de supervivencia equilibrada diseñada para el juego.</small>
+                      </div>
+                    </label>
+                    <label class="radio-card">
+                      <input type="radio" name="difficulty" value="2" />
+                      <div>
+                        <b>💀 Difícil</b>
+                        <small>Enemigos más letales, mayor exigencia de preparación y recursos.</small>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label><span>Combate entre jugadores (JcJ / Fuego amigo)</span></label>
+                  <div class="pvp-selector">
+                    <label class="radio-card">
+                      <input type="radio" name="pvpEnabled" value="false" />
+                      <div>
+                        <b>🕊️ Cooperativo puro (Sin fuego amigo)</b>
+                        <small>Tus ataques y habilidades no dañan a tus compañeros.</small>
+                      </div>
+                    </label>
+                    <label class="radio-card">
+                      <input type="radio" name="pvpEnabled" value="true" />
+                      <div>
+                        <b>⚔️ JcJ / Fuego amigo habilitado</b>
+                        <small>El combate entre jugadores y daño accidental están activos.</small>
+                      </div>
+                    </label>
+                  </div>
+
+                  <p class="fineprint" style="margin-top: 1.3rem;">
+                    💡 <b>Seguridad automática:</b> Al aplicar las reglas, el servidor se detiene de forma limpia, se crea un backup de retorno, se aplican los cambios al <code>.sav</code> y el servidor vuelve a arrancar.
+                  </p>
+                </div>
+              </div>
+
+              <div style="margin-top: 1.2rem; display: flex; justify-content: flex-end; gap: 0.8rem;">
+                <button type="submit" id="save-rules-btn" class="button primary">Guardar y aplicar reglas</button>
+              </div>
+            </form>
+          </article>
+
           <div class="two-columns">
+            <article class="panel">
+              <div class="section-head">
+                <div>
+                  <p class="eyebrow">PARTIDAS DETECTADAS</p>
+                  <h3>Mundos en el servidor</h3>
+                </div>
+                <button id="refresh-worlds" class="button tiny ghost" type="button" title="Refrescar">↻</button>
+              </div>
+              <p class="muted small">Activa cualquier mundo al instante o haz clic en <b>Editar reglas</b> para cambiar su dificultad.</p>
+              <div id="world-list" class="item-list"><p class="empty">Aún no hay mundos guardados.</p></div>
+            </article>
+
             <article class="panel upload-panel">
               <span class="big-icon">◇</span><h3>Importar mundo personalizado</h3>
-              <p>Crea el mundo en el juego con la dificultad, modo creativo o reglas JcJ que prefieras; después carga aquí su archivo <code>.sav</code>.</p>
+              <p>Puedes importar partidas <code>.sav</code> creadas en tu PC u otros servidores.</p>
               <label class="file-drop" for="world-file"><input id="world-file" type="file" accept=".sav" /><b>Seleccionar archivo .sav</b><span id="world-file-name">Máximo 2 GB</span></label>
               <button id="import-world" class="button primary full" disabled>Respaldar e importar mundo</button>
               <p class="warning-note">El servidor se detendrá, creará un backup de seguridad, importará el mundo y volverá a arrancar.</p>
-            </article>
-            <article class="panel">
-              <div class="section-head"><div><p class="eyebrow">ARCHIVOS</p><h3>Mundos detectados</h3></div></div>
-              <div id="world-list" class="item-list"><p class="empty">Aún no hay mundos guardados.</p></div>
             </article>
           </div>
         </section>
@@ -160,7 +244,7 @@
               <div class="form-grid">
                 <label class="wide"><span>Player ID del propietario <b>*</b></span><input name="ownerId" required placeholder="Copia el ID desde Ajustes dentro del juego" /></label>
                 <label><span>Nombre del servidor <b>*</b></span><input name="serverName" required /></label>
-                <label><span>Nombre del mundo <b>*</b></span><input name="worldName" required /></label>
+                <label><span>Nombre del mundo <b>*</b></span><input name="worldName" id="setting-world-name" list="world-datalist" required autocomplete="off" placeholder="Escribe o selecciona un mundo" /><datalist id="world-datalist"></datalist></label>
                 <label><span>Contraseña del mundo</span><input name="worldPassword" type="password" placeholder="Vacío conserva la actual" /></label>
                 <label><span>Contraseña admin del juego <b>*</b></span><input name="adminPassword" type="password" placeholder="Vacío conserva la actual" /></label>
                 <label class="wide"><span>Administradores</span><input name="administrators" placeholder="IDs separados por comas" /></label>

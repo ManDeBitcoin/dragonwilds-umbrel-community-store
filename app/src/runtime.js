@@ -18,6 +18,12 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { pipeline } from "node:stream/promises";
 import { isIP } from "node:net";
+import {
+  readWorldRulesFromFile,
+  updateWorldRulesInFile,
+  DIFFICULTY_LABELS,
+  PVP_LABELS,
+} from "./world-editor.js";
 
 const GAME_UID = Number(process.env.GAME_UID || 1000);
 const GAME_GID = Number(process.env.GAME_GID || 1000);
@@ -505,6 +511,19 @@ export class Runtime {
     });
   }
 
+  async findWorldPath(name) {
+    if (!name || typeof name !== "string" || name !== basename(name) || name.includes("/") || name.includes("\\") || name.includes("..")) {
+      throw new Error("Nombre de mundo inválido.");
+    }
+    const clean = basename(name).replace(/\.sav$/i, "");
+    if (!clean) throw new Error("Nombre de mundo inválido.");
+    const primary = join(SERVER_DIR, "RSDragonwilds", "Saved", "SaveGames", `${clean}.sav`);
+    const fallback = join(SERVER_DIR, "RSDragonwilds", "Saved", "Savegames", `${clean}.sav`);
+    if (await exists(primary)) return primary;
+    if (await exists(fallback)) return fallback;
+    return primary;
+  }
+
   async listWorlds() {
     const primary = join(SERVER_DIR, "RSDragonwilds", "Saved", "SaveGames");
     const fallback = join(SERVER_DIR, "RSDragonwilds", "Saved", "Savegames");
@@ -517,16 +536,78 @@ export class Runtime {
       for (const entry of entries) {
         if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".sav")) continue;
         if (worldsMap.has(entry.name)) continue;
-        const info = await stat(join(dir, entry.name));
+        const filePath = join(dir, entry.name);
+        const [info, rules] = await Promise.all([
+          stat(filePath),
+          readWorldRulesFromFile(filePath).catch(() => ({
+            detected: false,
+            difficulty: 1,
+            difficultyLabel: DIFFICULTY_LABELS[1],
+            pvpEnabled: false,
+            pvpLabel: PVP_LABELS[0],
+          })),
+        ]);
         worldsMap.set(entry.name, {
           name: entry.name,
+          baseName: entry.name.replace(/\.sav$/i, ""),
           size: info.size,
           updatedAt: info.mtime.toISOString(),
           active: entry.name.replace(/\.sav$/i, "") === this.settings.worldName,
+          rules: {
+            difficulty: rules.difficulty ?? 1,
+            difficultyLabel: rules.difficultyLabel ?? "Normal",
+            pvpEnabled: Boolean(rules.pvpEnabled),
+            pvpLabel: rules.pvpLabel ?? (rules.pvpEnabled ? "Activado (JcJ)" : "Desactivado (Coop)"),
+            detected: Boolean(rules.detected),
+          },
         });
       }
     }
     return Array.from(worldsMap.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  async getWorldRules(worldName) {
+    const path = await this.findWorldPath(worldName);
+    if (!(await exists(path))) throw new Error(`El mundo "${worldName}" no existe.`);
+    return await readWorldRulesFromFile(path);
+  }
+
+  async updateWorldRules(worldName, rules) {
+    const path = await this.findWorldPath(worldName);
+    if (!(await exists(path))) throw new Error(`El mundo "${worldName}" no existe.`);
+    return await this.withStoppedServer(async () => {
+      await this.createBackup(`pre-rules-${worldName}`, { serverAlreadyStopped: true });
+      const result = await updateWorldRulesInFile(path, rules);
+      const diffLabel = DIFFICULTY_LABELS[rules.difficulty] ?? rules.difficulty;
+      const pvpLabel = rules.pvpEnabled ? "Activado" : "Desactivado";
+      this.addLog("world", `Reglas de [${worldName}] actualizadas: Dificultad=${diffLabel}, Fuego amigo/JcJ=${pvpLabel}`);
+      return result;
+    });
+  }
+
+  async activateWorld(worldName) {
+    const clean = basename(worldName).replace(/\.sav$/i, "");
+    const path = await this.findWorldPath(clean);
+    if (!(await exists(path))) throw new Error(`El archivo de mundo para "${clean}" no existe.`);
+    return await this.withStoppedServer(async () => {
+      this.settings.worldName = clean;
+      await atomicWrite(SETTINGS_FILE, `${JSON.stringify(this.settings, null, 2)}\n`);
+      this.addLog("world", `Mundo activo cambiado a: ${clean}`);
+      return { ok: true, worldName: clean };
+    });
+  }
+
+  async duplicateWorld(worldName, targetName) {
+    const sourcePath = await this.findWorldPath(worldName);
+    if (!(await exists(sourcePath))) throw new Error(`El mundo "${worldName}" no existe.`);
+    const cleanTarget = basename(targetName).replace(/\.sav$/i, "").replace(/[^a-zA-Z0-9._-]+/g, "-");
+    if (!cleanTarget) throw new Error("Nombre de destino inválido.");
+    const worldDir = await resolveWorldDir();
+    const destPath = join(worldDir, `${cleanTarget}.sav`);
+    if (await exists(destPath)) throw new Error(`Ya existe un mundo con el nombre "${cleanTarget}".`);
+    await copyFile(sourcePath, destPath);
+    this.addLog("world", `Mundo duplicado: ${worldName} -> ${cleanTarget}.sav`);
+    return { name: `${cleanTarget}.sav`, baseName: cleanTarget };
   }
 
   async vpnStatus() {

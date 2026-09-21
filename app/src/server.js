@@ -307,6 +307,54 @@ async function api(req, res, url) {
     const result = await runtime.enqueue(() => runtime.importWorld(req, fileName));
     return json(res, 201, result);
   }
+  if (req.method === "GET" && url.pathname === "/api/worlds") {
+    return json(res, 200, await runtime.listWorlds());
+  }
+
+  const worldRulesMatch = url.pathname.match(/^\/api\/worlds\/([^/]+)\/rules$/);
+  if (req.method === "GET" && worldRulesMatch) {
+    const worldName = decodeURIComponent(worldRulesMatch[1]);
+    const rules = await runtime.getWorldRules(worldName);
+    return json(res, 200, rules);
+  }
+  if (req.method === "POST" && worldRulesMatch) {
+    if (!requireMutation(req, res)) return;
+    const worldName = decodeURIComponent(worldRulesMatch[1]);
+    const input = await bodyJson(req);
+    const result = await runtime.enqueue(() => runtime.updateWorldRules(worldName, input));
+    return json(res, 200, { ok: true, ...result });
+  }
+
+  const worldActivateMatch = url.pathname.match(/^\/api\/worlds\/([^/]+)\/activate$/);
+  if (req.method === "POST" && worldActivateMatch) {
+    if (!requireMutation(req, res)) return;
+    const worldName = decodeURIComponent(worldActivateMatch[1]);
+    const result = await runtime.enqueue(() => runtime.activateWorld(worldName));
+    return json(res, 200, result);
+  }
+
+  const worldDuplicateMatch = url.pathname.match(/^\/api\/worlds\/([^/]+)\/duplicate$/);
+  if (req.method === "POST" && worldDuplicateMatch) {
+    if (!requireMutation(req, res)) return;
+    const worldName = decodeURIComponent(worldDuplicateMatch[1]);
+    const input = await bodyJson(req);
+    const result = await runtime.enqueue(() => runtime.duplicateWorld(worldName, input.newName));
+    return json(res, 201, result);
+  }
+
+  const worldDownloadMatch = url.pathname.match(/^\/api\/worlds\/([^/]+)\/download$/);
+  if (req.method === "GET" && worldDownloadMatch) {
+    const worldName = decodeURIComponent(worldDownloadMatch[1]);
+    const filePath = await runtime.findWorldPath(worldName);
+    const fileInfo = await stat(filePath);
+    res.writeHead(200, {
+      "content-type": "application/octet-stream",
+      "content-length": fileInfo.size,
+      "content-disposition": `attachment; filename="${basename(filePath)}"`,
+      "cache-control": "no-store",
+    });
+    return createReadStream(filePath).pipe(res);
+  }
 
   return json(res, 404, { error: "Ruta API no encontrada." });
 }

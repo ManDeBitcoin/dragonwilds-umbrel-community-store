@@ -140,9 +140,92 @@ function renderStatus(status) {
 }
 
 function renderWorlds(worlds) {
-  $("#world-list").innerHTML = worlds.length ? worlds.map((world) => `
-    <div class="list-row"><div><b>${escapeHtml(world.name)}</b><small>${formatBytes(world.size)} · ${formatDate(world.updatedAt)}</small></div><span class="status-badge online">Guardado</span></div>
-  `).join("") : '<p class="empty">Aún no hay mundos guardados.</p>';
+  const datalist = $("#world-datalist");
+  if (datalist) {
+    datalist.innerHTML = worlds.map((w) => `<option value="${escapeHtml(w.baseName || w.name.replace(/\.sav$/i, ""))}"></option>`).join("");
+  }
+
+  // Si el formulario de reglas no tiene un mundo seleccionado, seleccionar el mundo activo por defecto
+  const currentInput = $("#rules-world-input")?.value;
+  const activeWorld = worlds.find((w) => w.active) || worlds[0];
+  if (!currentInput && activeWorld) {
+    loadWorldRulesIntoForm(activeWorld.baseName || activeWorld.name.replace(/\.sav$/i, ""), worlds);
+  }
+
+  $("#world-list").innerHTML = worlds.length ? worlds.map((world) => {
+    const base = world.baseName || world.name.replace(/\.sav$/i, "");
+    const isActive = world.active;
+    const diffText = world.rules?.difficultyLabel || "Normal";
+    const pvpText = world.rules?.pvpEnabled ? "JcJ activado" : "Cooperativo";
+    const pvpClass = world.rules?.pvpEnabled ? "amber" : "blue";
+
+    return `
+      <div class="world-item-card ${isActive ? 'active-card' : ''}">
+        <div class="world-item-main">
+          <div class="world-title-row">
+            <b>${escapeHtml(base)}</b>
+            ${isActive ? '<span class="status-badge online">ACTIVO</span>' : ''}
+          </div>
+          <div class="world-badges">
+            <span class="badge-tag green">${escapeHtml(diffText)}</span>
+            <span class="badge-tag ${pvpClass}">${escapeHtml(pvpText)}</span>
+            <small class="muted">${formatBytes(world.size)} · ${formatDate(world.updatedAt)}</small>
+          </div>
+        </div>
+        <div class="world-item-actions">
+          ${!isActive ? `<button class="button tiny ghost activate-world" data-name="${encodeURIComponent(base)}" type="button">Activar</button>` : ''}
+          <button class="button tiny ghost edit-world-rules" data-name="${encodeURIComponent(base)}" type="button">Editar reglas</button>
+          <a class="button tiny ghost" href="/api/worlds/${encodeURIComponent(base)}/download" download="${escapeHtml(world.name)}">Descargar</a>
+        </div>
+      </div>
+    `;
+  }).join("") : '<p class="empty">Aún no hay mundos guardados.</p>';
+
+  $$(".activate-world").forEach((btn) => {
+    btn.addEventListener("click", () => activateWorld(decodeURIComponent(btn.dataset.name)));
+  });
+  $$(".edit-world-rules").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      loadWorldRulesIntoForm(decodeURIComponent(btn.dataset.name));
+      $("#world-rules-panel")?.scrollIntoView({ behavior: "smooth" });
+    });
+  });
+}
+
+function loadWorldRulesIntoForm(worldName, worldsList = app.status?.worlds || []) {
+  const world = worldsList.find((w) => (w.baseName || w.name.replace(/\.sav$/i, "")) === worldName);
+  const targetName = world ? (world.baseName || world.name.replace(/\.sav$/i, "")) : worldName;
+
+  $("#rules-target-world").textContent = targetName;
+  $("#rules-world-input").value = targetName;
+
+  const isActive = world ? world.active : (app.status?.settings?.worldName === targetName);
+  $("#rules-active-badge").textContent = isActive ? "ACTIVO" : "PARTIDA GUARDADA";
+  $("#rules-active-badge").className = `status-badge ${isActive ? 'online' : ''}`;
+
+  const diffVal = String(world?.rules?.difficulty ?? 1);
+  const pvpVal = String(Boolean(world?.rules?.pvpEnabled));
+
+  $$('#world-rules-form input[name="difficulty"]').forEach((input) => {
+    input.checked = input.value === diffVal;
+  });
+  $$('#world-rules-form input[name="pvpEnabled"]').forEach((input) => {
+    input.checked = input.value === pvpVal;
+  });
+}
+
+async function activateWorld(name) {
+  if (!(await confirmAction("Activar mundo", `¿Deseas activar "${name}" como el mundo principal del servidor? El juego se reiniciará con esta partida.`))) {
+    return;
+  }
+  try {
+    toast(`Activando mundo ${name} y reiniciando…`);
+    await api(`/api/worlds/${encodeURIComponent(name)}/activate`, { method: "POST" });
+    toast(`Mundo "${name}" activado correctamente.`);
+    await refreshStatus(false);
+  } catch (error) {
+    showError(error);
+  }
 }
 
 function renderActivity(logs) {
@@ -378,6 +461,48 @@ $("#settings-form").addEventListener("submit", async (event) => {
     await Promise.all([loadSettings(), refreshStatus(false), loadRules()]);
     navigate("overview");
   } catch (error) { showError(error); }
+});
+
+$("#refresh-worlds")?.addEventListener("click", () => refreshStatus(false));
+
+$("#world-rules-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const targetWorld = $("#rules-world-input").value;
+  if (!targetWorld) {
+    showError(new Error("Selecciona un mundo para aplicar las reglas."));
+    return;
+  }
+
+  const formData = new FormData(form);
+  const difficulty = Number(formData.get("difficulty"));
+  const pvpEnabled = formData.get("pvpEnabled") === "true";
+
+  const confirmed = await confirmAction(
+    "Guardar reglas del mundo",
+    `Se detendrá el servidor, se creará un backup automático y se aplicará la dificultad seleccionada (${difficulty === 0 ? "Fácil" : difficulty === 1 ? "Normal" : "Difícil"}) y fuego amigo (${pvpEnabled ? "Activado" : "Desactivado"}) a "${targetWorld}".`
+  );
+
+  if (!confirmed) return;
+
+  const submitBtn = $("#save-rules-btn");
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Aplicando reglas y reiniciando…";
+
+  try {
+    toast("Deteniendo servidor, creando backup y aplicando reglas…");
+    const result = await api(`/api/worlds/${encodeURIComponent(targetWorld)}/rules`, {
+      method: "POST",
+      body: JSON.stringify({ difficulty, pvpEnabled }),
+    });
+    toast("¡Reglas aplicadas con éxito! El servidor está arrancando.");
+    await refreshStatus(false);
+  } catch (error) {
+    showError(error);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Guardar y aplicar reglas";
+  }
 });
 
 initialize().catch(showError);

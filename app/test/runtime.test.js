@@ -52,3 +52,13 @@ test("rechaza claves WireGuard malformadas e inyección de configuración", () =
     },
   }, defaultSettings()), /formato base64 válido/);
 });
+
+test("Runtime.findWorldPath valida nombres y rechaza traversal", async () => {
+  const { Runtime } = await import("../src/runtime.js");
+  const rt = new Runtime();
+  await assert.rejects(() => rt.findWorldPath("../etc/passwd"), /Nombre de mundo inválido/);
+  await assert.rejects(() => rt.findWorldPath("foo/bar"), /Nombre de mundo inválido/);
+  const path = await rt.findWorldPath("Chavito");
+  assert.match(path, /Chavito\.sav$/);
+});
+
