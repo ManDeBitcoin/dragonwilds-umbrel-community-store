@@ -541,7 +541,7 @@ $("#world-rules-form")?.addEventListener("submit", async (event) => {
 
   const confirmed = await confirmAction(
     "Guardar reglas del mundo",
-    `Se detendrá el servidor, se creará un backup automático y se aplicará la dificultad seleccionada (${difficulty === 0 ? "Fácil" : difficulty === 1 ? "Normal" : "Difícil"}) y fuego amigo (${pvpEnabled ? "Activado" : "Desactivado"}) a "${targetWorld}".`
+    `Se detendrá el servidor, se creará un backup automático y se aplicará la dificultad seleccionada (${difficulty === 1 ? "Normal" : difficulty === 3 ? "Difícil" : difficulty === 2 ? "Creativo" : "Personalizado"}) y fuego amigo (${pvpEnabled ? "Activado" : "Desactivado"}) a "${targetWorld}".`
   );
 
   if (!confirmed) return;

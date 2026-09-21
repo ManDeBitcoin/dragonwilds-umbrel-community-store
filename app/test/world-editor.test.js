@@ -110,20 +110,20 @@ test("detecta reglas por defecto cuando el buffer no contiene datos", () => {
 });
 
 test("inspecciona correctamente dificultad y PvP desde un buffer simulado", () => {
-  const buf = createMockSaveBuffer(2, 1); // Difícil, PvP activo
+  const buf = createMockSaveBuffer(3, 1); // Difícil (3), PvP activo
   const result = inspectWorldSave(buf);
   assert.equal(result.detected, true);
-  assert.equal(result.difficulty, 2);
+  assert.equal(result.difficulty, 3);
   assert.equal(result.difficultyLabel, "Difícil");
   assert.equal(result.pvpEnabled, true);
   assert.equal(result.pvpLabel, PVP_LABELS[1]);
 });
 
 test("inspecciona correctamente formato real de Unreal Engine GVAS (ej. Chavito: Difícil + JcJ Activo)", () => {
-  const gvasBuf = createGvasSaveBuffer(2, 1); // Difícil (2), PvP Activo (1)
+  const gvasBuf = createGvasSaveBuffer(3, 1); // Difícil (3), PvP Activo (1)
   const result = inspectWorldSave(gvasBuf);
   assert.equal(result.detected, true);
-  assert.equal(result.difficulty, 2);
+  assert.equal(result.difficulty, 3);
   assert.equal(result.difficultyLabel, "Difícil");
   assert.equal(result.pvpEnabled, true);
   assert.equal(result.pvpLabel, PVP_LABELS[1]);
@@ -136,7 +136,7 @@ test("parchea buffer real GVAS modificando dificultad y PvP y lo verifica", () =
 
   const inspected = inspectWorldSave(patched.buffer);
   assert.equal(inspected.difficulty, 0);
-  assert.equal(inspected.difficultyLabel, "Historia / Fácil");
+  assert.equal(inspected.difficultyLabel, "Personalizado");
   assert.equal(inspected.pvpEnabled, false);
   assert.equal(inspected.pvpLabel, PVP_LABELS[0]);
 });
@@ -152,7 +152,7 @@ test("parchea dificultad y PvP modificando los bytes correspondientes en buffer 
 
   const inspectedAfter = inspectWorldSave(patched.buffer);
   assert.equal(inspectedAfter.difficulty, 0);
-  assert.equal(inspectedAfter.difficultyLabel, "Historia / Fácil");
+  assert.equal(inspectedAfter.difficultyLabel, "Personalizado");
   assert.equal(inspectedAfter.pvpEnabled, true);
   assert.equal(inspectedAfter.pvpLabel, PVP_LABELS[1]);
 });
@@ -162,11 +162,11 @@ test("lee y actualiza reglas directamente en archivos del disco", async () => {
   const saveFile = join(tempDir, "Chavito.sav");
 
   try {
-    const mock = createGvasSaveBuffer(2, 1);
+    const mock = createGvasSaveBuffer(3, 1);
     await writeFile(saveFile, mock);
 
     const initialRules = await readWorldRulesFromFile(saveFile);
-    assert.equal(initialRules.difficulty, 2);
+    assert.equal(initialRules.difficulty, 3);
     assert.equal(initialRules.difficultyLabel, "Difícil");
     assert.equal(initialRules.pvpEnabled, true);
 
@@ -224,12 +224,12 @@ test("inspecciona y parchea formato nativo SAVE/CINF/PROP de Dragonwilds", async
   assert.equal(inspected.difficulty, 1);
   assert.equal(inspected.pvpEnabled, true);
 
-  // Parchear a Dificil (2) y PvP Desactivado (0)
-  const patched = patchWorldSave(nativeBuf, { difficulty: 2, pvpEnabled: false });
+  // Parchear a Dificil (3) y PvP Desactivado (0)
+  const patched = patchWorldSave(nativeBuf, { difficulty: 3, pvpEnabled: false });
   assert.equal(patched.modified, true);
 
   const reInspected = inspectWorldSave(patched.buffer);
-  assert.equal(reInspected.difficulty, 2);
+  assert.equal(reInspected.difficulty, 3);
   assert.equal(reInspected.difficultyLabel, "Difícil");
   assert.equal(reInspected.pvpEnabled, false);
 });

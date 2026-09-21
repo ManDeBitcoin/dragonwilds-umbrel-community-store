@@ -4,9 +4,10 @@ import { readFile, writeFile } from "node:fs/promises";
  * Constantes y mapeos de reglas de juego de Dragonwilds (sin emojis).
  */
 export const DIFFICULTY_LABELS = {
-  0: "Historia / Fácil",
+  0: "Personalizado",
   1: "Normal",
-  2: "Difícil",
+  2: "Creativo",
+  3: "Difícil",
 };
 
 export const PVP_LABELS = {
@@ -159,7 +160,7 @@ function inspectProperty(buffer, propNames, expectedType) {
       let cursor = pos + name.length;
       if (cursor < buffer.length && buffer[cursor] === 0) cursor += 1;
       const mockVal = buffer[cursor];
-      if (expectedType === "difficulty" && (mockVal === 0 || mockVal === 1 || mockVal === 2) && buffer[cursor + 1] === 0) {
+      if (expectedType === "difficulty" && (mockVal >= 0 && mockVal <= 3) && buffer[cursor + 1] === 0) {
         return { found: true, type: "byte", valOffset: cursor, value: mockVal };
       }
       if (expectedType === "pvp" && (mockVal === 0 || mockVal === 1) && buffer[cursor + 1] === 0) {
@@ -242,7 +243,7 @@ export function inspectDragonwildsBinary(buffer) {
     return {
       detected: true,
       format: "dragonwilds",
-      difficulty: (diff >= 0 && diff <= 2) ? diff : 1,
+      difficulty: (diff >= 0 && diff <= 3) ? diff : 1,
       difficultyLabel: DIFFICULTY_LABELS[diff] || "Normal",
       pvpEnabled: Boolean(pvp),
       pvpLabel: pvp ? PVP_LABELS[1] : PVP_LABELS[0],
@@ -302,7 +303,7 @@ export function patchWorldSave(buffer, { difficulty, pvpEnabled }) {
   let modified = false;
 
   if (inspected.format === "dragonwilds") {
-    if (typeof difficulty === "number" && difficulty >= 0 && difficulty <= 2) {
+    if (typeof difficulty === "number" && difficulty >= 0 && difficulty <= 3) {
       if (inspected.offsets.cinfDiffOffset !== null) {
         copy.writeInt32LE(difficulty, inspected.offsets.cinfDiffOffset);
         modified = true;
@@ -335,7 +336,7 @@ export function patchWorldSave(buffer, { difficulty, pvpEnabled }) {
   }
 
   // Fallback para formato GVAS / mock
-  if (typeof difficulty === "number" && difficulty >= 0 && difficulty <= 2) {
+  if (typeof difficulty === "number" && difficulty >= 0 && difficulty <= 3) {
     if (inspected.offsets.difficulty !== null) {
       if (inspected.offsets.diffType === "int") {
         copy.writeInt32LE(difficulty, inspected.offsets.difficulty);
