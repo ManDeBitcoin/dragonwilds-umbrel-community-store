@@ -131,58 +131,39 @@
               <input type="hidden" id="rules-world-input" name="targetWorld" value="" />
               <div class="form-grid">
                 <div>
-                  <label><span>Dificultad de la partida</span></label>
-                  <div class="difficulty-selector">
-                    <label class="radio-card">
-                      <input type="radio" name="difficulty" value="0" />
-                      <div>
-                        <b>🛡️ Historia / Fácil</b>
-                        <small>Combate accesible y penalización reducida. Ideal para explorar y construir.</small>
-                      </div>
-                    </label>
-                    <label class="radio-card">
-                      <input type="radio" name="difficulty" value="1" />
-                      <div>
-                        <b>⚔️ Normal</b>
-                        <small>La experiencia de supervivencia equilibrada diseñada para el juego.</small>
-                      </div>
-                    </label>
-                    <label class="radio-card">
-                      <input type="radio" name="difficulty" value="2" />
-                      <div>
-                        <b>💀 Difícil</b>
-                        <small>Enemigos más letales, mayor exigencia de preparación y recursos.</small>
-                      </div>
-                    </label>
-                  </div>
+                  <label>
+                    <span>Dificultad de la partida</span>
+                    <select id="rules-difficulty-select" name="difficulty">
+                      <option value="0">🛡️ Historia / Fácil (Exploración accesible, menor daño)</option>
+                      <option value="1">⚔️ Normal (Equilibrado, estándar recomendado)</option>
+                      <option value="2">💀 Difícil (Enemigos letales, supervivencia exigente)</option>
+                    </select>
+                  </label>
+                  <p class="fineprint" style="margin-top: 0.65rem;">
+                    Ajusta el daño recibido, agresividad y penalización por muerte en el mundo.
+                  </p>
                 </div>
 
                 <div>
-                  <label><span>Combate entre jugadores (JcJ / Fuego amigo)</span></label>
-                  <div class="pvp-selector">
-                    <label class="radio-card">
-                      <input type="radio" name="pvpEnabled" value="false" />
-                      <div>
-                        <b>🕊️ Cooperativo puro (Sin fuego amigo)</b>
-                        <small>Tus ataques y habilidades no dañan a tus compañeros.</small>
-                      </div>
-                    </label>
-                    <label class="radio-card">
-                      <input type="radio" name="pvpEnabled" value="true" />
-                      <div>
-                        <b>⚔️ JcJ / Fuego amigo habilitado</b>
-                        <small>El combate entre jugadores y daño accidental están activos.</small>
-                      </div>
-                    </label>
-                  </div>
-
-                  <p class="fineprint" style="margin-top: 1.3rem;">
-                    💡 <b>Seguridad automática:</b> Al aplicar las reglas, el servidor se detiene de forma limpia, se crea un backup de retorno, se aplican los cambios al <code>.sav</code> y el servidor vuelve a arrancar.
+                  <label><span>Combate entre jugadores (JcJ)</span></label>
+                  <label class="toggle-card">
+                    <input type="checkbox" id="rules-pvp-toggle" name="pvpEnabledToggle" />
+                    <span>
+                      <b id="rules-pvp-title">🕊️ Fuego amigo desactivado</b>
+                      <small id="rules-pvp-desc">Modo cooperativo: los jugadores no se hacen daño.</small>
+                    </span>
+                    <i></i>
+                  </label>
+                  <p class="fineprint" style="margin-top: 0.65rem;">
+                    Activa el switch si deseas habilitar combates o daño entre aliados.
                   </p>
                 </div>
               </div>
 
-              <div style="margin-top: 1.2rem; display: flex; justify-content: flex-end; gap: 0.8rem;">
+              <div style="margin-top: 1.2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem; border-top: 1px solid var(--line); padding-top: 1rem;">
+                <p class="fineprint" style="margin: 0;">
+                  💡 <b>Seguridad automática:</b> Al guardar se genera un backup de retorno y el servidor se reinicia con las nuevas reglas.
+                </p>
                 <button type="submit" id="save-rules-btn" class="button primary">Guardar y aplicar reglas</button>
               </div>
             </form>

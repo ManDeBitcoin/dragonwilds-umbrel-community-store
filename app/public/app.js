@@ -204,14 +204,23 @@ function loadWorldRulesIntoForm(worldName, worldsList = app.status?.worlds || []
   $("#rules-active-badge").className = `status-badge ${isActive ? 'online' : ''}`;
 
   const diffVal = String(world?.rules?.difficulty ?? 1);
-  const pvpVal = String(Boolean(world?.rules?.pvpEnabled));
+  const pvpVal = Boolean(world?.rules?.pvpEnabled);
 
-  $$('#world-rules-form input[name="difficulty"]').forEach((input) => {
-    input.checked = input.value === diffVal;
-  });
-  $$('#world-rules-form input[name="pvpEnabled"]').forEach((input) => {
-    input.checked = input.value === pvpVal;
-  });
+  const diffSelect = $("#rules-difficulty-select");
+  if (diffSelect) diffSelect.value = diffVal;
+
+  const pvpToggle = $("#rules-pvp-toggle");
+  if (pvpToggle) {
+    pvpToggle.checked = pvpVal;
+    updatePvpToggleLabels(pvpVal);
+  }
+}
+
+function updatePvpToggleLabels(checked) {
+  const title = $("#rules-pvp-title");
+  const desc = $("#rules-pvp-desc");
+  if (title) title.textContent = checked ? "⚔️ Fuego amigo activado" : "🕊️ Fuego amigo desactivado";
+  if (desc) desc.textContent = checked ? "Modo JcJ: los ataques dañan a otros jugadores." : "Modo cooperativo: los jugadores no se hacen daño.";
 }
 
 async function activateWorld(name) {
@@ -465,18 +474,20 @@ $("#settings-form").addEventListener("submit", async (event) => {
 
 $("#refresh-worlds")?.addEventListener("click", () => refreshStatus(false));
 
+$("#rules-pvp-toggle")?.addEventListener("change", (event) => {
+  updatePvpToggleLabels(event.target.checked);
+});
+
 $("#world-rules-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const form = event.currentTarget;
   const targetWorld = $("#rules-world-input").value;
   if (!targetWorld) {
     showError(new Error("Selecciona un mundo para aplicar las reglas."));
     return;
   }
 
-  const formData = new FormData(form);
-  const difficulty = Number(formData.get("difficulty"));
-  const pvpEnabled = formData.get("pvpEnabled") === "true";
+  const difficulty = Number($("#rules-difficulty-select")?.value ?? 1);
+  const pvpEnabled = Boolean($("#rules-pvp-toggle")?.checked);
 
   const confirmed = await confirmAction(
     "Guardar reglas del mundo",

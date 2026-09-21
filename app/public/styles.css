@@ -19,7 +19,7 @@
 * { box-sizing: border-box; }
 html { min-width: 320px; background: var(--bg); }
 body { margin: 0; min-height: 100vh; color: var(--text); background: radial-gradient(circle at 80% 10%, #1f2c22 0, transparent 26rem), var(--bg); }
-button, input, textarea { font: inherit; }
+button, input, textarea, select { font: inherit; }
 button { color: inherit; }
 code, pre, textarea { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
 .hidden { display: none !important; }
@@ -38,8 +38,9 @@ code, pre, textarea { font-family: "SFMono-Regular", Consolas, "Liberation Mono"
 .auth-card form { max-width: 27rem; display: grid; gap: 1rem; }
 label > span { display: block; margin-bottom: .55rem; color: #bac4bd; font-size: .82rem; font-weight: 650; }
 label > span b { color: var(--amber); }
-input, textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: .85rem 1rem; color: var(--text); background: #0d1310; outline: none; transition: border .2s, box-shadow .2s; }
-input:focus, textarea:focus { border-color: #719c78; box-shadow: 0 0 0 3px #719c7824; }
+input, textarea, select { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: .85rem 1rem; color: var(--text); background: #0d1310; outline: none; transition: border .2s, box-shadow .2s; }
+input:focus, textarea:focus, select:focus { border-color: #719c78; box-shadow: 0 0 0 3px #719c7824; }
+select option { background: #131a16; color: var(--text); }
 .auth-art { position: relative; overflow: hidden; display: grid; align-items: end; padding: 7vw; background: linear-gradient(140deg, #1a281d 0, #162219 40%, #0c120f 100%); }
 .auth-art::after { content: ""; position: absolute; inset: 0; opacity: .45; background-image: linear-gradient(#9ac17a08 1px, transparent 1px), linear-gradient(90deg, #9ac17a08 1px, transparent 1px); background-size: 42px 42px; mask-image: radial-gradient(circle at 65% 35%, black, transparent 66%); }
 .auth-art blockquote { position: relative; z-index: 1; margin: 0; font-family: Georgia, serif; font-size: clamp(2rem, 4vw, 4.6rem); line-height: 1.06; color: #ebebdb; }
