@@ -1,0 +1,47 @@
+manifestVersion: 1
+id: dragonwilds-server
+category: networking
+name: RuneScape Dragonwilds Server
+version: "0.1.0"
+tagline: Tu mundo persistente, administrado desde Umbrel
+description: >-
+  Ejecuta y administra un servidor dedicado de RuneScape: Dragonwilds desde una
+  interfaz web. El asistente configura el mundo, credenciales, actualizaciones,
+  backups y una ruta WireGuard opcional para instalaciones detrás de CGNAT.
+
+
+  Incluye parada segura antes de respaldar o restaurar, importación de mundos
+  `.sav` con reglas personalizadas de dificultad/JcJ, registros con secretos
+  ocultos, diagnóstico del handshake y reglas listas para wg-easy.
+
+
+  Requiere un Umbrel x86_64, al menos 4 GB de RAM y aproximadamente 20 GB de
+  almacenamiento. El servidor oficial de Jagex no publica actualmente un
+  runtime arm64. El modo WireGuard necesita `/dev/net/tun` y capacidades de red
+  dentro del contenedor; no se monta el socket Docker del host.
+releaseNotes: ""
+
+developer: Dragonwilds Community
+website: https://dragonwilds.runescape.com/news/how-to-dedicated-servers
+dependencies: []
+repo: https://github.com/ManDeBitcoin/dragonwilds-umbrel-community-store
+support: https://github.com/ManDeBitcoin/dragonwilds-umbrel-community-store/issues
+
+port: 34219
+icon: https://raw.githubusercontent.com/ManDeBitcoin/dragonwilds-umbrel-community-store/main/assets/icon.svg
+gallery: []
+path: ""
+
+defaultUsername: admin
+defaultPassword: ""
+deterministicPassword: true
+
+backupIgnore:
+  - data/server/Engine/*
+  - data/server/steamapps/*
+  - data/server/RSDragonwilds/Binaries/*
+  - data/server/RSDragonwilds/Content/*
+  - data/server/RSDragonwilds/Plugins/*
+
+submitter: Dragonwilds Community
+submission: https://github.com/ManDeBitcoin/dragonwilds-umbrel-community-store

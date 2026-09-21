@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111714" />
+    <title>Dragonwilds Server</title>
+    <link rel="icon" href="/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="toast" class="toast" aria-live="polite"></div>
+
+    <main id="auth-view" class="auth-shell hidden">
+      <section class="auth-card">
+        <div class="brand-mark"><img src="/mark.svg" alt="" /></div>
+        <p class="eyebrow">UMBrel · servidor dedicado</p>
+        <h1>RuneScape:<br /><span>Dragonwilds</span></h1>
+        <p id="auth-copy" class="muted">Accede al centro de control de tu mundo.</p>
+        <form id="auth-form">
+          <label>
+            <span id="auth-label">Contraseña</span>
+            <input id="auth-password" type="password" autocomplete="current-password" required minlength="1" />
+          </label>
+          <label id="auth-confirm-wrap" class="hidden">
+            <span>Confirma la contraseña</span>
+            <input id="auth-confirm" type="password" autocomplete="new-password" />
+          </label>
+          <button type="submit" class="button primary full">Entrar al panel</button>
+        </form>
+        <p class="fineprint">La sesión se mantiene sólo en este navegador y caduca automáticamente.</p>
+      </section>
+      <aside class="auth-art" aria-hidden="true">
+        <div class="rune rune-one">ᚨ</div>
+        <div class="rune rune-two">ᛉ</div>
+        <div class="rune rune-three">ᚱ</div>
+        <div class="ember ember-one"></div>
+        <div class="ember ember-two"></div>
+        <blockquote>Tu mundo. Tus reglas.<br />Tu servidor.</blockquote>
+      </aside>
+    </main>
+
+    <div id="app-view" class="app-shell hidden">
+      <aside class="sidebar">
+        <a class="brand" href="#overview" aria-label="Dragonwilds Server">
+          <img src="/mark.svg" alt="" />
+          <span><b>Dragonwilds</b><small>Server Console</small></span>
+        </a>
+        <nav id="nav">
+          <button data-page="overview" class="active"><span>⌂</span> Resumen</button>
+          <button data-page="world"><span>◇</span> Mundo</button>
+          <button data-page="backups"><span>↺</span> Backups</button>
+          <button data-page="network"><span>⌁</span> Red y VPN</button>
+          <button data-page="logs"><span>›_</span> Registros</button>
+          <button data-page="settings"><span>⚙</span> Ajustes</button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="mini-health"><i id="side-dot"></i><span><b id="side-state">Comprobando</b><small id="side-detail">—</small></span></div>
+          <button id="logout" class="link-button">Cerrar sesión</button>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">CENTRO DE CONTROL</p>
+            <h2 id="page-title">Resumen</h2>
+          </div>
+          <div class="top-actions">
+            <button id="refresh" class="icon-button" title="Actualizar">↻</button>
+            <button id="quick-restart" class="button ghost">Reiniciar</button>
+            <button id="quick-toggle" class="button primary">Arrancar</button>
+          </div>
+        </header>
+
+        <section id="page-overview" class="page active">
+          <div id="setup-banner" class="setup-banner hidden">
+            <div><span class="step-pill">Primer paso</span><h3>Completa la configuración del mundo</h3><p>Necesitamos tu Player ID, los nombres del servidor y los datos del túnel.</p></div>
+            <button class="button light" data-goto="settings">Abrir asistente</button>
+          </div>
+          <div class="hero-grid">
+            <article class="status-hero panel dark-panel">
+              <div class="panel-heading"><span>Estado del servidor</span><i id="hero-dot"></i></div>
+              <div class="server-orb"><div><small id="server-kicker">SERVIDOR</small><strong id="server-state">—</strong><span id="server-uptime">Sin actividad</span></div></div>
+              <p id="server-message" class="server-message">Comprobando estado…</p>
+              <div class="hero-actions">
+                <button id="hero-toggle" class="button light">Arrancar servidor</button>
+                <button id="hero-update" class="button dark">Backup y actualizar</button>
+              </div>
+            </article>
+            <div class="metric-grid">
+              <article class="metric panel"><span class="metric-icon green">⌁</span><small>WIREGUARD</small><strong id="vpn-state">—</strong><p id="vpn-detail">Sin datos</p></article>
+              <article class="metric panel"><span class="metric-icon amber">↺</span><small>ÚLTIMO BACKUP</small><strong id="backup-age">—</strong><p id="backup-detail">Sin backups</p></article>
+              <article class="metric panel"><span class="metric-icon red">◉</span><small>PUERTO DE JUEGO</small><strong id="game-port">23409</strong><p id="beacon-port">Baliza 24520 / UDP</p></article>
+              <article class="metric panel"><span class="metric-icon blue">◇</span><small>MUNDOS</small><strong id="world-count">0</strong><p>Guardados detectados</p></article>
+            </div>
+          </div>
+          <div class="two-columns">
+            <article class="panel">
+              <div class="section-head"><div><p class="eyebrow">CONEXIÓN</p><h3>Ruta pública</h3></div><button id="test-ip" class="button tiny">Probar salida</button></div>
+              <div class="route-map">
+                <div><span>🎮</span><b>Jugador</b><small>PS5 / PC</small></div><i>→</i><div><span>☁</span><b>VPS</b><small id="route-vps">Endpoint</small></div><i>→</i><div><span>⌁</span><b>Umbrel</b><small>WireGuard</small></div><i>→</i><div><span>♜</span><b>Mundo</b><small>Dragonwilds</small></div>
+              </div>
+              <div class="ip-result"><span>IP pública vista por el juego</span><code id="public-ip">No comprobada</code></div>
+            </article>
+            <article class="panel activity-panel">
+              <div class="section-head"><div><p class="eyebrow">ACTIVIDAD</p><h3>Eventos recientes</h3></div><button class="link-button" data-goto="logs">Ver todo</button></div>
+              <div id="activity" class="activity-list"><p class="empty">Todavía no hay eventos.</p></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="page-world" class="page">
+          <div class="page-intro"><div><h3>Mundo, JcJ y dificultad</h3><p>Dragonwilds guarda las reglas personalizadas dentro del archivo del mundo, no en <code>DedicatedServer.ini</code>.</p></div></div>
+          <div class="two-columns">
+            <article class="panel upload-panel">
+              <span class="big-icon">◇</span><h3>Importar mundo personalizado</h3>
+              <p>Crea el mundo en el juego con la dificultad, modo creativo o reglas JcJ que prefieras; después carga aquí su archivo <code>.sav</code>.</p>
+              <label class="file-drop" for="world-file"><input id="world-file" type="file" accept=".sav" /><b>Seleccionar archivo .sav</b><span id="world-file-name">Máximo 2 GB</span></label>
+              <button id="import-world" class="button primary full" disabled>Respaldar e importar mundo</button>
+              <p class="warning-note">El servidor se detendrá, creará un backup de seguridad, importará el mundo y volverá a arrancar.</p>
+            </article>
+            <article class="panel">
+              <div class="section-head"><div><p class="eyebrow">ARCHIVOS</p><h3>Mundos detectados</h3></div></div>
+              <div id="world-list" class="item-list"><p class="empty">Aún no hay mundos guardados.</p></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="page-backups" class="page">
+          <div class="page-intro"><div><h3>Backups recuperables</h3><p>Cada actualización y restauración crea un punto de retorno antes de modificar los datos.</p></div><button id="create-backup" class="button primary">Crear backup ahora</button></div>
+          <article class="panel"><div id="backup-list" class="backup-list"><p class="empty">Todavía no hay backups.</p></div></article>
+        </section>
+
+        <section id="page-network" class="page">
+          <div class="page-intro"><div><h3>WireGuard y CGNAT</h3><p>El proceso del juego usa el VPS como salida; el resto de Umbrel conserva su ruta normal.</p></div><div><button id="vpn-stop" class="button ghost">Apagar túnel</button> <button id="vpn-apply" class="button primary">Aplicar túnel</button></div></div>
+          <div class="two-columns">
+            <article class="panel">
+              <p class="eyebrow">ESTADO DEL TÚNEL</p><div class="network-status"><span id="network-badge" class="status-badge">—</span><h3 id="network-endpoint">Sin endpoint</h3><p id="network-handshake">Sin handshake reciente</p></div>
+              <div class="stat-pair"><div><small>RECIBIDO</small><b id="network-rx">—</b></div><div><small>ENVIADO</small><b id="network-tx">—</b></div></div>
+            </article>
+            <article class="panel">
+              <div class="section-head"><div><p class="eyebrow">VPS / WG-EASY</p><h3>Reglas necesarias</h3></div><button id="copy-rules" class="button tiny">Copiar</button></div>
+              <p class="muted small">Añade ambas variables al contenedor wg-easy. Incluyen el puerto de juego y la baliza.</p>
+              <label class="code-label">WG_POST_UP<textarea id="rules-up" readonly></textarea></label>
+              <label class="code-label">WG_POST_DOWN<textarea id="rules-down" readonly></textarea></label>
+            </article>
+          </div>
+        </section>
+
+        <section id="page-logs" class="page">
+          <div class="page-intro"><div><h3>Registros en vivo</h3><p>Los secretos conocidos se ocultan antes de aparecer aquí.</p></div><button id="clear-log-view" class="button ghost">Limpiar vista</button></div>
+          <article class="terminal"><div class="terminal-bar"><i></i><i></i><i></i><span>dragonwilds.log</span></div><pre id="log-output">Esperando eventos…</pre></article>
+        </section>
+
+        <section id="page-settings" class="page">
+          <div class="page-intro"><div><h3>Configuración</h3><p>Guardar aplica la red y reinicia el servidor cuando sea necesario.</p></div></div>
+          <form id="settings-form">
+            <article class="panel form-section"><div class="form-title"><span>01</span><div><h3>Identidad del servidor</h3><p>Datos visibles en el navegador de mundos.</p></div></div>
+              <div class="form-grid">
+                <label class="wide"><span>Player ID del propietario <b>*</b></span><input name="ownerId" required placeholder="Copia el ID desde Ajustes dentro del juego" /></label>
+                <label><span>Nombre del servidor <b>*</b></span><input name="serverName" required /></label>
+                <label><span>Nombre del mundo <b>*</b></span><input name="worldName" required /></label>
+                <label><span>Contraseña del mundo</span><input name="worldPassword" type="password" placeholder="Vacío conserva la actual" /></label>
+                <label><span>Contraseña admin del juego <b>*</b></span><input name="adminPassword" type="password" placeholder="Vacío conserva la actual" /></label>
+                <label class="wide"><span>Administradores</span><input name="administrators" placeholder="IDs separados por comas" /></label>
+              </div>
+            </article>
+            <article class="panel form-section"><div class="form-title"><span>02</span><div><h3>Operación</h3><p>Actualizaciones y protección del mundo.</p></div></div>
+              <div class="choice-row">
+                <label class="toggle-card"><input name="autoStart" type="checkbox" /><span><b>Arranque automático</b><small>Inicia el mundo con la app.</small></span><i></i></label>
+                <label class="toggle-card"><input name="autoUpdate" type="checkbox" /><span><b>Actualizaciones automáticas</b><small>Reinicia cuando Steam detecta una versión.</small></span><i></i></label>
+                <label><span>Backups a conservar</span><input name="backupRetention" type="number" min="1" max="50" /></label>
+              </div>
+            </article>
+            <article class="panel form-section"><div class="form-title"><span>03</span><div><h3>Conectividad</h3><p>Directa o mediante tu VPS WireGuard.</p></div></div>
+              <div class="segmented"><label><input type="radio" name="networkMode" value="wireguard" /><span>VPS + WireGuard</span></label><label><input type="radio" name="networkMode" value="direct" /><span>Conexión directa</span></label></div>
+              <div id="vpn-fields" class="form-grid inset">
+                <label><span>Dirección local WG</span><input name="vpn.address" placeholder="10.8.0.2/24" /></label>
+                <label><span>Endpoint del VPS</span><input name="vpn.endpoint" placeholder="vps.example.com:51820" /></label>
+                <label><span>Puerto local</span><input name="vpn.listenPort" type="number" min="1" max="65535" /></label>
+                <label><span>Keepalive (segundos)</span><input name="vpn.keepalive" type="number" min="0" max="120" /></label>
+                <label class="wide"><span>Clave privada local</span><input name="vpn.privateKey" type="password" placeholder="Vacío conserva la actual" /></label>
+                <label class="wide"><span>Clave pública del VPS</span><input name="vpn.peerPublicKey" /></label>
+                <label class="wide"><span>Preshared key (opcional)</span><input name="vpn.presharedKey" type="password" placeholder="Vacío conserva la actual" /></label>
+              </div>
+            </article>
+            <div class="save-bar"><p>Los cambios de <b>DedicatedServer.ini</b> sólo son seguros con el juego detenido.</p><button class="button primary" type="submit">Guardar y aplicar</button></div>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="confirm-dialog">
+      <form method="dialog">
+        <span class="dialog-icon">!</span><h3 id="dialog-title">Confirmar acción</h3><p id="dialog-copy"></p>
+        <div class="dialog-actions"><button value="cancel" class="button ghost">Cancelar</button><button value="confirm" class="button danger">Confirmar</button></div>
+      </form>
+    </dialog>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

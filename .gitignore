@@ -1,0 +1,4 @@
+dev-data/
+*.tar.gz
+*.partial
+.DS_Store
