@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#111714" />
     <title>Dragonwilds Server</title>
     <link rel="icon" href="/mark.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.2" />
   </head>
   <body>
     <div id="toast" class="toast" aria-live="polite"></div>
@@ -135,7 +135,7 @@
               </div>
             </div>
 
-            <form id="world-rules-form" style="margin-top: 1.2rem;">
+            <form id="world-rules-form" onsubmit="return false;" style="margin-top: 1.2rem;">
               <input type="hidden" id="rules-world-input" name="targetWorld" value="" />
               <div class="form-grid">
                 <div>
@@ -271,6 +271,6 @@
       </form>
     </dialog>
 
-    <script type="module" src="/app.js"></script>
+    <script type="module" src="/app.js?v=0.1.2"></script>
   </body>
 </html>

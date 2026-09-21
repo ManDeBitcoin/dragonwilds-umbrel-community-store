@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { readFile, stat, writeFile, mkdir } from "node:fs/promises";
 import { createReadStream } from "node:fs";
-import { dirname, extname, join, normalize, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createHash,
@@ -386,8 +386,9 @@ async function staticFile(req, res, url) {
     "x-content-type-options": "nosniff",
     "referrer-policy": "no-referrer",
     "permissions-policy": "camera=(), microphone=(), geolocation=()",
-    "content-security-policy": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'self'",
-    "cache-control": path.endsWith("index.html") ? "no-cache" : "public, max-age=3600",
+    "cache-control": (path.endsWith(".html") || path.endsWith(".js") || path.endsWith(".css"))
+      ? "no-cache, no-store, must-revalidate"
+      : "public, max-age=3600",
   };
   res.writeHead(200, headers);
   createReadStream(path).pipe(res);

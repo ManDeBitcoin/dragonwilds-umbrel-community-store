@@ -380,6 +380,9 @@ function showError(error) {
 }
 
 async function initialize() {
+  if (location.search) {
+    history.replaceState(null, "", location.pathname + location.hash);
+  }
   app.bootstrap = await api("/api/bootstrap");
   const needsSetup = app.bootstrap.needsLocalPassword;
   $("#auth-confirm-wrap").classList.toggle("hidden", !needsSetup);
