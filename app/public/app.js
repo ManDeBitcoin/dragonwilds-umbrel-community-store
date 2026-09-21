@@ -145,11 +145,21 @@ function renderWorlds(worlds) {
     datalist.innerHTML = worlds.map((w) => `<option value="${escapeHtml(w.baseName || w.name.replace(/\.sav$/i, ""))}"></option>`).join("");
   }
 
-  // Si el formulario de reglas no tiene un mundo seleccionado, seleccionar el mundo activo por defecto
-  const currentInput = $("#rules-world-input")?.value;
-  const activeWorld = worlds.find((w) => w.active) || worlds[0];
-  if (!currentInput && activeWorld) {
-    loadWorldRulesIntoForm(activeWorld.baseName || activeWorld.name.replace(/\.sav$/i, ""), worlds);
+  const worldSelect = $("#rules-world-select");
+  if (worldSelect && worlds.length) {
+    const currentVal = worldSelect.value || $("#rules-world-input")?.value;
+    worldSelect.innerHTML = worlds.map((w) => {
+      const base = w.baseName || w.name.replace(/\.sav$/i, "");
+      const activeTag = w.active ? " (Activo)" : "";
+      return `<option value="${escapeHtml(base)}">${escapeHtml(base)}${activeTag}</option>`;
+    }).join("");
+
+    const targetBase = worlds.some((w) => (w.baseName || w.name.replace(/\.sav$/i, "")) === currentVal)
+      ? currentVal
+      : ((worlds.find((w) => w.active) || worlds[0]).baseName || (worlds.find((w) => w.active) || worlds[0]).name.replace(/\.sav$/i, ""));
+
+    worldSelect.value = targetBase;
+    loadWorldRulesIntoForm(targetBase, worlds);
   }
 
   $("#world-list").innerHTML = worlds.length ? worlds.map((world) => {
@@ -186,7 +196,10 @@ function renderWorlds(worlds) {
   });
   $$(".edit-world-rules").forEach((btn) => {
     btn.addEventListener("click", () => {
-      loadWorldRulesIntoForm(decodeURIComponent(btn.dataset.name));
+      const targetName = decodeURIComponent(btn.dataset.name);
+      const sel = $("#rules-world-select");
+      if (sel) sel.value = targetName;
+      loadWorldRulesIntoForm(targetName);
       $("#world-rules-panel")?.scrollIntoView({ behavior: "smooth" });
     });
   });
@@ -196,12 +209,21 @@ function loadWorldRulesIntoForm(worldName, worldsList = app.status?.worlds || []
   const world = worldsList.find((w) => (w.baseName || w.name.replace(/\.sav$/i, "")) === worldName);
   const targetName = world ? (world.baseName || world.name.replace(/\.sav$/i, "")) : worldName;
 
-  $("#rules-target-world").textContent = targetName;
+  const worldSelect = $("#rules-world-select");
+  if (worldSelect && worldSelect.value !== targetName) {
+    worldSelect.value = targetName;
+  }
   $("#rules-world-input").value = targetName;
 
   const isActive = world ? world.active : (app.status?.settings?.worldName === targetName);
   $("#rules-active-badge").textContent = isActive ? "ACTIVO" : "PARTIDA GUARDADA";
   $("#rules-active-badge").className = `status-badge ${isActive ? 'online' : ''}`;
+
+  const activateBtn = $("#rules-activate-btn");
+  if (activateBtn) {
+    activateBtn.classList.toggle("hidden", isActive);
+    activateBtn.textContent = `Activar "${targetName}"`;
+  }
 
   const diffVal = String(world?.rules?.difficulty ?? 1);
   const pvpVal = Boolean(world?.rules?.pvpEnabled);
@@ -219,7 +241,7 @@ function loadWorldRulesIntoForm(worldName, worldsList = app.status?.worlds || []
 function updatePvpToggleLabels(checked) {
   const title = $("#rules-pvp-title");
   const desc = $("#rules-pvp-desc");
-  if (title) title.textContent = checked ? "⚔️ Fuego amigo activado" : "🕊️ Fuego amigo desactivado";
+  if (title) title.textContent = checked ? "Fuego amigo activado" : "Fuego amigo desactivado";
   if (desc) desc.textContent = checked ? "Modo JcJ: los ataques dañan a otros jugadores." : "Modo cooperativo: los jugadores no se hacen daño.";
 }
 
@@ -473,6 +495,31 @@ $("#settings-form").addEventListener("submit", async (event) => {
 });
 
 $("#refresh-worlds")?.addEventListener("click", () => refreshStatus(false));
+
+$("#rules-world-select")?.addEventListener("change", async (event) => {
+  const name = event.target.value;
+  if (!name) return;
+  loadWorldRulesIntoForm(name);
+  try {
+    const fresh = await api(`/api/worlds/${encodeURIComponent(name)}/rules`);
+    if (fresh) {
+      const diffSelect = $("#rules-difficulty-select");
+      if (diffSelect && typeof fresh.difficulty === "number") diffSelect.value = String(fresh.difficulty);
+      const pvpToggle = $("#rules-pvp-toggle");
+      if (pvpToggle && typeof fresh.pvpEnabled === "boolean") {
+        pvpToggle.checked = fresh.pvpEnabled;
+        updatePvpToggleLabels(fresh.pvpEnabled);
+      }
+    }
+  } catch (error) {
+    console.warn("No se pudieron refrescar las reglas del mundo:", error);
+  }
+});
+
+$("#rules-activate-btn")?.addEventListener("click", () => {
+  const targetWorld = $("#rules-world-input")?.value;
+  if (targetWorld) activateWorld(targetWorld);
+});
 
 $("#rules-pvp-toggle")?.addEventListener("change", (event) => {
   updatePvpToggleLabels(event.target.checked);

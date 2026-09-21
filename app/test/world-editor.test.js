@@ -55,6 +55,52 @@ function createMockSaveBuffer(difficulty = 1, pvp = 0) {
   return Buffer.concat(parts);
 }
 
+/**
+ * Crea un buffer con la estructura real de Unreal Engine GVAS (Tagged Properties).
+ */
+function createGvasSaveBuffer(difficulty = 2, pvp = 1) {
+  function writeFString(str) {
+    const buf = Buffer.alloc(4 + str.length + 1);
+    buf.writeInt32LE(str.length + 1, 0);
+    buf.write(str, 4, "ascii");
+    buf.writeUInt8(0, 4 + str.length);
+    return buf;
+  }
+  function writeFName(str, number = 0) {
+    const strBuf = writeFString(str);
+    const numBuf = Buffer.alloc(4);
+    numBuf.writeInt32LE(number, 0);
+    return Buffer.concat([strBuf, numBuf]);
+  }
+
+  const parts = [];
+  parts.push(Buffer.from("GVAS", "ascii"));
+  parts.push(Buffer.alloc(20)); // Header metadata
+
+  // DifficultyType (ByteProperty)
+  parts.push(writeFName("DifficultyType"));
+  parts.push(writeFName("ByteProperty"));
+  const diffTagMeta = Buffer.alloc(8);
+  diffTagMeta.writeInt32LE(1, 0); // Size = 1
+  diffTagMeta.writeInt32LE(0, 4); // ArrayIndex = 0
+  parts.push(diffTagMeta);
+  parts.push(writeFName("None")); // EnumName
+  parts.push(Buffer.from([0x00])); // Padding
+  parts.push(Buffer.from([difficulty])); // Value
+
+  // PvpEnabled (BoolProperty)
+  parts.push(writeFName("PvpEnabled"));
+  parts.push(writeFName("BoolProperty"));
+  const pvpTagMeta = Buffer.alloc(8);
+  pvpTagMeta.writeInt32LE(0, 0); // Size = 0
+  pvpTagMeta.writeInt32LE(0, 4); // ArrayIndex = 0
+  parts.push(pvpTagMeta);
+  parts.push(Buffer.from([pvp ? 0x01 : 0x00])); // BoolVal
+  parts.push(Buffer.from([0x00])); // Padding
+
+  return Buffer.concat(parts);
+}
+
 test("detecta reglas por defecto cuando el buffer no contiene datos", () => {
   const empty = Buffer.alloc(100);
   const result = inspectWorldSave(empty);
@@ -73,7 +119,29 @@ test("inspecciona correctamente dificultad y PvP desde un buffer simulado", () =
   assert.equal(result.pvpLabel, PVP_LABELS[1]);
 });
 
-test("parchea dificultad y PvP modificando los bytes correspondientes", () => {
+test("inspecciona correctamente formato real de Unreal Engine GVAS (ej. Chavito: Difícil + JcJ Activo)", () => {
+  const gvasBuf = createGvasSaveBuffer(2, 1); // Difícil (2), PvP Activo (1)
+  const result = inspectWorldSave(gvasBuf);
+  assert.equal(result.detected, true);
+  assert.equal(result.difficulty, 2);
+  assert.equal(result.difficultyLabel, "Difícil");
+  assert.equal(result.pvpEnabled, true);
+  assert.equal(result.pvpLabel, PVP_LABELS[1]);
+});
+
+test("parchea buffer real GVAS modificando dificultad y PvP y lo verifica", () => {
+  const gvasBuf = createGvasSaveBuffer(2, 1); // Difícil + JcJ
+  const patched = patchWorldSave(gvasBuf, { difficulty: 0, pvpEnabled: false });
+  assert.equal(patched.modified, true);
+
+  const inspected = inspectWorldSave(patched.buffer);
+  assert.equal(inspected.difficulty, 0);
+  assert.equal(inspected.difficultyLabel, "Historia / Fácil");
+  assert.equal(inspected.pvpEnabled, false);
+  assert.equal(inspected.pvpLabel, PVP_LABELS[0]);
+});
+
+test("parchea dificultad y PvP modificando los bytes correspondientes en buffer simulado", () => {
   const initial = createMockSaveBuffer(1, 0); // Normal, Coop
   const inspectedBefore = inspectWorldSave(initial);
   assert.equal(inspectedBefore.difficulty, 1);
@@ -91,22 +159,23 @@ test("parchea dificultad y PvP modificando los bytes correspondientes", () => {
 
 test("lee y actualiza reglas directamente en archivos del disco", async () => {
   const tempDir = await mkdtemp(join(tmpdir(), "dragonwilds-test-"));
-  const saveFile = join(tempDir, "TestWorld.sav");
+  const saveFile = join(tempDir, "Chavito.sav");
 
   try {
-    const mock = createMockSaveBuffer(0, 0);
+    const mock = createGvasSaveBuffer(2, 1);
     await writeFile(saveFile, mock);
 
     const initialRules = await readWorldRulesFromFile(saveFile);
-    assert.equal(initialRules.difficulty, 0);
-    assert.equal(initialRules.pvpEnabled, false);
+    assert.equal(initialRules.difficulty, 2);
+    assert.equal(initialRules.difficultyLabel, "Difícil");
+    assert.equal(initialRules.pvpEnabled, true);
 
-    await updateWorldRulesInFile(saveFile, { difficulty: 2, pvpEnabled: true });
+    await updateWorldRulesInFile(saveFile, { difficulty: 1, pvpEnabled: false });
 
     const updatedRules = await readWorldRulesFromFile(saveFile);
-    assert.equal(updatedRules.difficulty, 2);
-    assert.equal(updatedRules.difficultyLabel, "Difícil");
-    assert.equal(updatedRules.pvpEnabled, true);
+    assert.equal(updatedRules.difficulty, 1);
+    assert.equal(updatedRules.difficultyLabel, "Normal");
+    assert.equal(updatedRules.pvpEnabled, false);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }

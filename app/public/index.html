@@ -99,7 +99,7 @@
             <article class="panel">
               <div class="section-head"><div><p class="eyebrow">CONEXIÓN</p><h3>Ruta pública</h3></div><button id="test-ip" class="button tiny">Probar salida</button></div>
               <div class="route-map">
-                <div><span>🎮</span><b>Jugador</b><small>PS5 / PC</small></div><i>→</i><div><span>☁</span><b>VPS</b><small id="route-vps">Endpoint</small></div><i>→</i><div><span>⌁</span><b>Umbrel</b><small>WireGuard</small></div><i>→</i><div><span>♜</span><b>Mundo</b><small>Dragonwilds</small></div>
+                <div><span>▣</span><b>Jugador</b><small>PS5 / PC</small></div><i>→</i><div><span>◈</span><b>VPS</b><small id="route-vps">Endpoint</small></div><i>→</i><div><span>⌁</span><b>Umbrel</b><small>WireGuard</small></div><i>→</i><div><span>♜</span><b>Mundo</b><small>Dragonwilds</small></div>
               </div>
               <div class="ip-result"><span>IP pública vista por el juego</span><code id="public-ip">No comprobada</code></div>
             </article>
@@ -119,12 +119,20 @@
           </div>
 
           <article class="panel" id="world-rules-panel" style="margin-bottom: 1.5rem;">
-            <div class="section-head">
-              <div>
+            <div class="section-head" style="align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+              <div style="flex: 1; min-width: 260px;">
                 <p class="eyebrow">REGLAS Y DIFICULTAD</p>
-                <h3 id="rules-card-title">Mundo: <span id="rules-target-world">—</span></h3>
+                <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.25rem;">
+                  <label for="rules-world-select" style="font-weight: 700; font-size: 1.15rem; color: var(--text-bright); margin: 0; white-space: nowrap;">Mundo:</label>
+                  <select id="rules-world-select" style="max-width: 280px; font-weight: 600; padding: 0.4rem 0.75rem;">
+                    <option value="">Cargando mundos...</option>
+                  </select>
+                </div>
               </div>
-              <span id="rules-active-badge" class="status-badge online">ACTIVO</span>
+              <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span id="rules-active-badge" class="status-badge online">ACTIVO</span>
+                <button id="rules-activate-btn" class="button tiny ghost hidden" type="button">Activar en servidor</button>
+              </div>
             </div>
 
             <form id="world-rules-form" style="margin-top: 1.2rem;">
@@ -134,9 +142,9 @@
                   <label>
                     <span>Dificultad de la partida</span>
                     <select id="rules-difficulty-select" name="difficulty">
-                      <option value="0">🛡️ Historia / Fácil (Exploración accesible, menor daño)</option>
-                      <option value="1">⚔️ Normal (Equilibrado, estándar recomendado)</option>
-                      <option value="2">💀 Difícil (Enemigos letales, supervivencia exigente)</option>
+                      <option value="0">Historia / Fácil (Exploración accesible, menor daño)</option>
+                      <option value="1">Normal (Equilibrado, estándar recomendado)</option>
+                      <option value="2">Difícil (Enemigos letales, supervivencia exigente)</option>
                     </select>
                   </label>
                   <p class="fineprint" style="margin-top: 0.65rem;">
@@ -149,7 +157,7 @@
                   <label class="toggle-card">
                     <input type="checkbox" id="rules-pvp-toggle" name="pvpEnabledToggle" />
                     <span>
-                      <b id="rules-pvp-title">🕊️ Fuego amigo desactivado</b>
+                      <b id="rules-pvp-title">Fuego amigo desactivado</b>
                       <small id="rules-pvp-desc">Modo cooperativo: los jugadores no se hacen daño.</small>
                     </span>
                     <i></i>
@@ -162,7 +170,7 @@
 
               <div style="margin-top: 1.2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem; border-top: 1px solid var(--line); padding-top: 1rem;">
                 <p class="fineprint" style="margin: 0;">
-                  💡 <b>Seguridad automática:</b> Al guardar se genera un backup de retorno y el servidor se reinicia con las nuevas reglas.
+                  <b>Seguridad automática:</b> Al guardar se genera un backup de retorno y el servidor se reinicia con las nuevas reglas.
                 </p>
                 <button type="submit" id="save-rules-btn" class="button primary">Guardar y aplicar reglas</button>
               </div>
