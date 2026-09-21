@@ -2,7 +2,7 @@ manifestVersion: 1
 id: dragonwilds-server
 category: networking
 name: RuneScape Dragonwilds Server
-version: "0.1.2"
+version: "0.1.3"
 tagline: Tu mundo persistente, administrado desde Umbrel
 description: >-
   Ejecuta y administra un servidor dedicado de RuneScape: Dragonwilds desde una

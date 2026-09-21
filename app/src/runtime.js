@@ -644,10 +644,16 @@ export class Runtime {
         let content = (await exists(iniPath)) ? await readFile(iniPath, "utf8") : "";
         const updates = {};
         if (worldName) updates.DefaultWorldName = worldName;
-        if (typeof rules.difficulty === "number") updates.DifficultyType = String(rules.difficulty);
+        if (typeof rules.difficulty === "number") {
+          updates.DifficultyType = String(rules.difficulty);
+          updates.SurvivalDifficulty = String(rules.difficulty);
+        }
         if (typeof rules.pvpEnabled === "boolean" || typeof rules.pvpEnabled === "number") {
           updates.PvpEnabled = rules.pvpEnabled ? "1" : "0";
+          updates.FriendlyFire = rules.pvpEnabled ? "1" : "0";
+          updates.bFriendlyFire = rules.pvpEnabled ? "1" : "0";
         }
+        content = updateIniSection(content, "/Script/Dominion.DedicatedServerSettings", updates);
         content = updateIniSection(content, "ServerSettings", updates);
         await atomicWrite(iniPath, content, 0o644);
       } catch (err) {

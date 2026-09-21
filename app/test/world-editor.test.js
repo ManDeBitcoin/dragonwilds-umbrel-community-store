@@ -180,3 +180,57 @@ test("lee y actualiza reglas directamente en archivos del disco", async () => {
     await rm(tempDir, { recursive: true, force: true });
   }
 });
+
+test("inspecciona y parchea formato nativo SAVE/CINF/PROP de Dragonwilds", async () => {
+  // Construye un buffer simulado exacto con CINF y PROP
+  const parts = [];
+  parts.push(Buffer.from("SAVE", "ascii"));
+  parts.push(Buffer.alloc(60)); // Header
+
+  // CINF
+  const cinfStart = Buffer.alloc(12);
+  cinfStart.write("CINF", 0, "ascii");
+  cinfStart.writeInt32LE(200, 4); // len
+  cinfStart.writeInt32LE(2, 8); // 2 props: FriendlyFire, SurvivalDifficulty
+  parts.push(cinfStart);
+
+  function writeStr(s) {
+    const b = Buffer.alloc(4 + s.length + 1);
+    b.writeInt32LE(s.length + 1, 0);
+    b.write(s, 4, "utf8");
+    return b;
+  }
+  parts.push(writeStr("FriendlyFire"));
+  parts.push(writeStr("SurvivalDifficulty"));
+
+  // Offsets
+  const offBuf = Buffer.alloc(4 + 3 * 4);
+  offBuf.writeInt32LE(2, 0);
+  offBuf.writeInt32LE(0, 4);  // FriendlyFire at 0
+  offBuf.writeInt32LE(1, 8);  // SurvivalDifficulty at 1
+  offBuf.writeInt32LE(5, 12); // End at 5
+  parts.push(offBuf);
+
+  // Payload: FriendlyFire (1 byte: 1), SurvivalDifficulty (4 bytes: 1)
+  const payload = Buffer.alloc(5);
+  payload.writeUInt8(1, 0); // FriendlyFire = 1
+  payload.writeInt32LE(1, 1); // SurvivalDifficulty = 1
+  parts.push(payload);
+
+  const nativeBuf = Buffer.concat(parts);
+  const inspected = inspectWorldSave(nativeBuf);
+  assert.equal(inspected.detected, true);
+  assert.equal(inspected.format, "dragonwilds");
+  assert.equal(inspected.difficulty, 1);
+  assert.equal(inspected.pvpEnabled, true);
+
+  // Parchear a Dificil (2) y PvP Desactivado (0)
+  const patched = patchWorldSave(nativeBuf, { difficulty: 2, pvpEnabled: false });
+  assert.equal(patched.modified, true);
+
+  const reInspected = inspectWorldSave(patched.buffer);
+  assert.equal(reInspected.difficulty, 2);
+  assert.equal(reInspected.difficultyLabel, "Difícil");
+  assert.equal(reInspected.pvpEnabled, false);
+});
+
