@@ -8,7 +8,7 @@ services:
 
   app:
     # Release checklist: pin the published tag with its manifest digest before adding this store to Umbrel.
-    image: ghcr.io/ManDeBitcoin/dragonwilds-umbrel:0.1.0
+    image: ghcr.io/ManDeBitcoin/dragonwilds-umbrel:0.1.0@sha256:b0c3a2afcbe3dd720e904fbcb0d348ac1a7aa2c543be83521656dc2a33b254e4
     restart: on-failure
     stop_grace_period: 1m
     ports:
