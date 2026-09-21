@@ -6,7 +6,7 @@ if [[ $# -lt 1 || $# -gt 2 ]]; then
   exit 2
 fi
 
-image_ref="$1"
+image_ref="$(echo "$1" | tr '[:upper:]' '[:lower:]')"
 if [[ $# -eq 2 ]]; then
   digest="$2"
 else
