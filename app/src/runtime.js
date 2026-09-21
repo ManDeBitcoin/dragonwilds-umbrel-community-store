@@ -10,6 +10,7 @@ import {
   rename,
   rm,
   stat,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
@@ -26,9 +27,17 @@ const DATA_DIR = resolve(process.env.DATA_DIR || "/data/control");
 const SERVER_DIR = resolve(process.env.SERVER_DIR || "/home/steam/rsdw-dedicated");
 const BACKUP_DIR = resolve(process.env.BACKUP_DIR || "/data/backups");
 const WG_DIR = resolve(process.env.WG_DIR || "/etc/wireguard");
-const WORLD_DIR = join(SERVER_DIR, "RSDragonwilds", "Saved", "Savegames");
+const WORLD_DIR = join(SERVER_DIR, "RSDragonwilds", "Saved", "SaveGames");
 const SETTINGS_FILE = join(DATA_DIR, "settings.json");
 const GAME_ENTRY = process.env.GAME_ENTRY || "/entry.sh";
+
+export async function resolveWorldDir() {
+  const primary = join(SERVER_DIR, "RSDragonwilds", "Saved", "SaveGames");
+  const fallback = join(SERVER_DIR, "RSDragonwilds", "Saved", "Savegames");
+  if (await exists(primary)) return primary;
+  if (await exists(fallback)) return fallback;
+  return primary;
+}
 
 export const constants = {
   GAME_PORT,
@@ -207,6 +216,8 @@ export class Runtime {
   }
 
   async init() {
+    const saveGamesUpper = join(SERVER_DIR, "RSDragonwilds", "Saved", "SaveGames");
+    const saveGamesLower = join(SERVER_DIR, "RSDragonwilds", "Saved", "Savegames");
     await Promise.all([
       mkdir(DATA_DIR, { recursive: true }),
       mkdir(SERVER_DIR, { recursive: true }),
@@ -214,6 +225,15 @@ export class Runtime {
       mkdir(WG_DIR, { recursive: true }),
       mkdir(WORLD_DIR, { recursive: true }),
     ]);
+    if ((await exists(saveGamesUpper)) && !(await exists(saveGamesLower))) {
+      try {
+        await symlink("SaveGames", saveGamesLower);
+      } catch {}
+    } else if ((await exists(saveGamesLower)) && !(await exists(saveGamesUpper))) {
+      try {
+        await symlink("Savegames", saveGamesUpper);
+      } catch {}
+    }
     if (await exists(SETTINGS_FILE)) {
       try {
         this.settings = { ...defaultSettings(), ...JSON.parse(await readFile(SETTINGS_FILE, "utf8")) };
@@ -464,9 +484,10 @@ export class Runtime {
       if (await exists(join(SERVER_DIR, "RSDragonwilds", "Saved"))) {
         await this.createBackup("pre-import", { serverAlreadyStopped: true });
       }
-      await mkdir(WORLD_DIR, { recursive: true });
-      const temp = join(WORLD_DIR, `.${clean}.${randomBytes(4).toString("hex")}.partial`);
-      const target = join(WORLD_DIR, clean);
+      const worldDir = await resolveWorldDir();
+      await mkdir(worldDir, { recursive: true });
+      const temp = join(worldDir, `.${clean}.${randomBytes(4).toString("hex")}.partial`);
+      const target = join(worldDir, clean);
       let bytes = 0;
       readable.on("data", (chunk) => {
         bytes += chunk.length;
@@ -485,15 +506,27 @@ export class Runtime {
   }
 
   async listWorlds() {
-    if (!(await exists(WORLD_DIR))) return [];
-    const entries = await readdir(WORLD_DIR, { withFileTypes: true });
-    const worlds = [];
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".sav")) continue;
-      const info = await stat(join(WORLD_DIR, entry.name));
-      worlds.push({ name: entry.name, size: info.size, updatedAt: info.mtime.toISOString() });
+    const primary = join(SERVER_DIR, "RSDragonwilds", "Saved", "SaveGames");
+    const fallback = join(SERVER_DIR, "RSDragonwilds", "Saved", "Savegames");
+    const dirs = [primary, fallback];
+    const worldsMap = new Map();
+
+    for (const dir of dirs) {
+      if (!(await exists(dir))) continue;
+      const entries = await readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".sav")) continue;
+        if (worldsMap.has(entry.name)) continue;
+        const info = await stat(join(dir, entry.name));
+        worldsMap.set(entry.name, {
+          name: entry.name,
+          size: info.size,
+          updatedAt: info.mtime.toISOString(),
+          active: entry.name.replace(/\.sav$/i, "") === this.settings.worldName,
+        });
+      }
     }
-    return worlds.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return Array.from(worldsMap.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
   async vpnStatus() {
