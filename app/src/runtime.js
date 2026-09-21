@@ -98,6 +98,62 @@ function validateEndpoint(value) {
   return /^\[[0-9a-fA-F:]+\]:\d{1,5}$/.test(value) || /^[a-zA-Z0-9.-]+:\d{1,5}$/.test(value);
 }
 
+function updateIniSection(content, section, updates) {
+  const lines = content ? content.split(/\r?\n/) : [];
+  let inSection = false;
+  let sectionFound = false;
+  const updatedKeys = new Set();
+  const result = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      if (inSection) {
+        for (const [k, v] of Object.entries(updates)) {
+          if (!updatedKeys.has(k)) {
+            result.push(`${k}=${v}`);
+            updatedKeys.add(k);
+          }
+        }
+      }
+      inSection = trimmed.toLowerCase() === `[${section.toLowerCase()}]`;
+      if (inSection) sectionFound = true;
+      result.push(line);
+      continue;
+    }
+
+    if (inSection) {
+      const match = line.match(/^([^=]+)=(.*)$/);
+      if (match) {
+        const key = match[1].trim();
+        if (Object.hasOwn(updates, key)) {
+          result.push(`${key}=${updates[key]}`);
+          updatedKeys.add(key);
+          continue;
+        }
+      }
+    }
+
+    result.push(line);
+  }
+
+  if (!sectionFound) {
+    result.push(`[${section}]`);
+    for (const [k, v] of Object.entries(updates)) {
+      result.push(`${k}=${v}`);
+    }
+  } else if (inSection || updatedKeys.size < Object.keys(updates).length) {
+    for (const [k, v] of Object.entries(updates)) {
+      if (!updatedKeys.has(k)) {
+        result.push(`${k}=${v}`);
+        updatedKeys.add(k);
+      }
+    }
+  }
+
+  return result.join("\n") + "\n";
+}
+
 export function validateSettings(input, current = defaultSettings()) {
   const next = structuredClone(current);
   next.ownerId = cleanText(input.ownerId, 128);
@@ -342,6 +398,10 @@ export class Runtime {
     this.serverMessage = options.validate ? "Validando archivos y arrancando" : "Actualizando y arrancando";
     await this.applyVpn();
     await mkdir(WORLD_DIR, { recursive: true });
+    try {
+      const activeRules = await this.getWorldRules(this.settings.worldName).catch(() => null);
+      await this.syncDedicatedServerIni(this.settings.worldName, activeRules || {});
+    } catch {}
 
     const executable = process.env.MOCK_GAME === "1" ? process.execPath : GAME_ENTRY;
     const args = process.env.MOCK_GAME === "1"
@@ -572,15 +632,43 @@ export class Runtime {
     return await readWorldRulesFromFile(path);
   }
 
+  async syncDedicatedServerIni(worldName, rules = {}) {
+    const configDirs = [
+      join(SERVER_DIR, "RSDragonwilds", "Saved", "Config", "LinuxServer"),
+      join(SERVER_DIR, "RSDragonwilds", "Saved", "Config", "WindowsServer"),
+    ];
+    for (const dir of configDirs) {
+      const iniPath = join(dir, "DedicatedServer.ini");
+      try {
+        await mkdir(dir, { recursive: true });
+        let content = (await exists(iniPath)) ? await readFile(iniPath, "utf8") : "";
+        const updates = {};
+        if (worldName) updates.DefaultWorldName = worldName;
+        if (typeof rules.difficulty === "number") updates.DifficultyType = String(rules.difficulty);
+        if (typeof rules.pvpEnabled === "boolean" || typeof rules.pvpEnabled === "number") {
+          updates.PvpEnabled = rules.pvpEnabled ? "1" : "0";
+        }
+        content = updateIniSection(content, "ServerSettings", updates);
+        await atomicWrite(iniPath, content, 0o644);
+      } catch (err) {
+        this.addLog("world", `Aviso al sincronizar DedicatedServer.ini: ${err.message}`);
+      }
+    }
+  }
+
   async updateWorldRules(worldName, rules) {
-    const path = await this.findWorldPath(worldName);
-    if (!(await exists(path))) throw new Error(`El mundo "${worldName}" no existe.`);
+    const clean = basename(worldName).replace(/\.sav$/i, "");
+    const path = await this.findWorldPath(clean);
+    if (!(await exists(path))) throw new Error(`El mundo "${clean}" no existe.`);
     return await this.withStoppedServer(async () => {
-      await this.createBackup(`pre-rules-${worldName}`, { serverAlreadyStopped: true });
+      await this.createBackup(`pre-rules-${clean}`, { serverAlreadyStopped: true });
       const result = await updateWorldRulesInFile(path, rules);
+      this.settings.worldName = clean;
+      await atomicWrite(SETTINGS_FILE, `${JSON.stringify(this.settings, null, 2)}\n`);
+      await this.syncDedicatedServerIni(clean, rules);
       const diffLabel = DIFFICULTY_LABELS[rules.difficulty] ?? rules.difficulty;
       const pvpLabel = rules.pvpEnabled ? "Activado" : "Desactivado";
-      this.addLog("world", `Reglas de [${worldName}] actualizadas: Dificultad=${diffLabel}, Fuego amigo/JcJ=${pvpLabel}`);
+      this.addLog("world", `Mundo activo fijado en [${clean}] con reglas: Dificultad=${diffLabel}, Fuego amigo/JcJ=${pvpLabel}`);
       return result;
     });
   }
@@ -592,6 +680,8 @@ export class Runtime {
     return await this.withStoppedServer(async () => {
       this.settings.worldName = clean;
       await atomicWrite(SETTINGS_FILE, `${JSON.stringify(this.settings, null, 2)}\n`);
+      const rules = await readWorldRulesFromFile(path).catch(() => null);
+      await this.syncDedicatedServerIni(clean, rules || {});
       this.addLog("world", `Mundo activo cambiado a: ${clean}`);
       return { ok: true, worldName: clean };
     });
