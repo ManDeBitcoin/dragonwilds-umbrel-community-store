@@ -2,6 +2,7 @@ import { createReadStream, createWriteStream } from "node:fs";
 import {
   access,
   chmod,
+  chown,
   copyFile,
   mkdir,
   open,
@@ -248,12 +249,18 @@ async function command(commandName, args = [], options = {}) {
   });
 }
 
-async function atomicWrite(path, contents, mode = 0o600) {
+async function atomicWrite(path, contents, mode = 0o600, uid = GAME_UID, gid = GAME_GID) {
   await mkdir(dirname(path), { recursive: true });
+  try {
+    await chown(dirname(path), uid, gid);
+  } catch {}
   const temp = `${path}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
   await writeFile(temp, contents, { mode });
   await rename(temp, path);
   await chmod(path, mode);
+  try {
+    await chown(path, uid, gid);
+  } catch {}
 }
 
 async function exists(path) {
@@ -402,6 +409,13 @@ export class Runtime {
       const activeRules = await this.getWorldRules(this.settings.worldName).catch(() => null);
       await this.syncDedicatedServerIni(this.settings.worldName, activeRules || {});
     } catch {}
+
+    if (process.env.MOCK_GAME !== "1") {
+      try {
+        await command("chown", ["-R", `${GAME_UID}:${GAME_GID}`, SERVER_DIR], { allowFailure: true });
+        await command("chmod", ["-R", "u+rwX,g+rwX,o+rX", SERVER_DIR], { allowFailure: true });
+      } catch {}
+    }
 
     const executable = process.env.MOCK_GAME === "1" ? process.execPath : GAME_ENTRY;
     const args = process.env.MOCK_GAME === "1"
@@ -641,6 +655,9 @@ export class Runtime {
       const iniPath = join(dir, "DedicatedServer.ini");
       try {
         await mkdir(dir, { recursive: true });
+        try {
+          await chown(dir, GAME_UID, GAME_GID);
+        } catch {}
         let content = (await exists(iniPath)) ? await readFile(iniPath, "utf8") : "";
         const updates = {};
         if (worldName) updates.DefaultWorldName = worldName;
@@ -655,7 +672,11 @@ export class Runtime {
         }
         content = updateIniSection(content, "/Script/Dominion.DedicatedServerSettings", updates);
         content = updateIniSection(content, "ServerSettings", updates);
-        await atomicWrite(iniPath, content, 0o644);
+        await atomicWrite(iniPath, content, 0o666, GAME_UID, GAME_GID);
+        try {
+          await chown(iniPath, GAME_UID, GAME_GID);
+          await chmod(iniPath, 0o666);
+        } catch {}
       } catch (err) {
         this.addLog("world", `Aviso al sincronizar DedicatedServer.ini: ${err.message}`);
       }
@@ -669,6 +690,10 @@ export class Runtime {
     return await this.withStoppedServer(async () => {
       await this.createBackup(`pre-rules-${clean}`, { serverAlreadyStopped: true });
       const result = await updateWorldRulesInFile(path, rules);
+      try {
+        await chown(path, GAME_UID, GAME_GID);
+        await chmod(path, 0o666);
+      } catch {}
       this.settings.worldName = clean;
       await atomicWrite(SETTINGS_FILE, `${JSON.stringify(this.settings, null, 2)}\n`);
       await this.syncDedicatedServerIni(clean, rules);
