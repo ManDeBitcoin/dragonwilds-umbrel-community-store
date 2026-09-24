@@ -2,7 +2,7 @@ manifestVersion: 1
 id: dragonwilds-server
 category: networking
 name: RuneScape Dragonwilds Server
-version: "0.1.5"
+version: "0.1.6"
 tagline: Tu mundo persistente, administrado desde Umbrel
 description: >-
   Ejecuta y administra un servidor dedicado de RuneScape: Dragonwilds desde una
@@ -20,9 +20,11 @@ description: >-
   runtime arm64. El modo WireGuard necesita `/dev/net/tun` y capacidades de red
   dentro del contenedor; no se monta el socket Docker del host.
 releaseNotes: >-
-  Adaptación e integración completa del servidor migrado (mundo Chavito, servidor ChamapTV,
-  SpudCache con 33 celdas, lista de administradores KnownPlayerList, túnel WireGuard precargado hacia VPS,
-  lanzador seguro contra sobreescritura de DedicatedServer.ini y auto-seeding en Umbrel).
+  v0.1.6: Soporte completo optimizado para umbrelOS 2.0. Nueva interfaz gráfica
+  Dark Fantasy inmersiva, gráficos de telemetría CPU/RAM en tiempo real, slots
+  orbitales de jugadores con blasones heráldicos procedurales, editor en caliente
+  de reglas de mundo (Dificultad, PvP, Crossplay, Hardcore), reactividad instantánea
+  SSE, cabeceras anti-caché dinámicas y script de migración inteligente desde Homelab.
 
 developer: Dragonwilds Community
 website: https://dragonwilds.runescape.com/news/how-to-dedicated-servers
