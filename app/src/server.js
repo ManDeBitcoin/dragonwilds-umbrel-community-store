@@ -437,27 +437,40 @@ async function api(req, res, url) {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/logs") {
+    const source = (url.searchParams.get("source") || "all").toLowerCase();
+    const limit = url.searchParams.get("limit") || 200;
+    return json(res, 200, {
+      source,
+      logs: runtime.getLogs(source, limit),
+    });
+  }
+
   if (req.method === "GET" && url.pathname === "/api/logs/download") {
-    const logPath = join(constants.SERVER_DIR, "RSDragonwilds", "Saved", "Logs", "RSDragonwilds.log");
-    try {
-      const fileInfo = await stat(logPath);
-      res.writeHead(200, {
-        "content-type": "text/plain; charset=utf-8",
-        "content-length": fileInfo.size,
-        "content-disposition": 'attachment; filename="RSDragonwilds.log"',
-        "cache-control": "no-store",
-      });
-      return createReadStream(logPath).pipe(res);
-    } catch {
-      const text = runtime.logs.map((l) => `[${l.at}] [${l.source.toUpperCase()}] ${l.line}`).join("\n");
-      res.writeHead(200, {
-        "content-type": "text/plain; charset=utf-8",
-        "content-length": Buffer.byteLength(text),
-        "content-disposition": 'attachment; filename="dragonwilds-panel.log"',
-        "cache-control": "no-store",
-      });
-      return res.end(text);
+    const source = (url.searchParams.get("source") || "server").toLowerCase();
+    if (source === "server") {
+      const logPath = join(constants.SERVER_DIR, "RSDragonwilds", "Saved", "Logs", "RSDragonwilds.log");
+      try {
+        const fileInfo = await stat(logPath);
+        res.writeHead(200, {
+          "content-type": "text/plain; charset=utf-8",
+          "content-length": fileInfo.size,
+          "content-disposition": 'attachment; filename="RSDragonwilds.log"',
+          "cache-control": "no-store",
+        });
+        return createReadStream(logPath).pipe(res);
+      } catch {}
     }
+    const logs = runtime.getLogs(source, 2000);
+    const text = logs.map((l) => `[${l.at}] [${(l.source || source).toUpperCase()}] ${l.line}`).join("\n");
+    const downloadName = source === "server" ? "RSDragonwilds.log" : `dragonwilds-${source}.log`;
+    res.writeHead(200, {
+      "content-type": "text/plain; charset=utf-8",
+      "content-length": Buffer.byteLength(text),
+      "content-disposition": `attachment; filename="${downloadName}"`,
+      "cache-control": "no-store",
+    });
+    return res.end(text);
   }
 
   return json(res, 404, { error: "Ruta API no encontrada." });

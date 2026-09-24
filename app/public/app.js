@@ -9,6 +9,7 @@ const app = {
   rules: null,
   players: [],
   onlinePlayers: [],
+  logs: [],
   activeLogFilter: "all",
   logEventSource: null,
   poller: null,
@@ -323,6 +324,7 @@ function navigate(page) {
   if (target === "settings" && !app.settings) loadSettings().catch(showError);
   if (target === "backups") loadBackups().catch(showError);
   if (target === "network") loadRules().catch(showError);
+  if (target === "logs") loadLogs(app.activeLogFilter).catch(showError);
 }
 
 function renderStatus(status) {
@@ -405,7 +407,10 @@ function renderStatus(status) {
 
   renderWorlds(status.worlds);
   renderActivity(status.logs);
-  renderLogs(status.logs);
+  if (!app.logs || !app.logs.length) {
+    app.logs = status.logs || [];
+    renderLogs(app.logs);
+  }
   renderOnlinePlayers(uniquePlayers);
 
   if (status.server.state === "starting" || status.server.state === "stopping") {
@@ -584,14 +589,52 @@ function renderActivity(logs) {
 }
 
 function renderLogs(logs) {
-  const filtered = logs
+  const list = logs || app.logs || [];
+  const filtered = list
     .filter((item) => new Date(item.at).getTime() >= app.localLogClearedAt)
     .filter((item) => app.activeLogFilter === "all" || (item.source || "").toLowerCase() === app.activeLogFilter.toLowerCase());
 
   $("#log-output").textContent = filtered.length
-    ? filtered.map((item) => `${item.at.slice(11, 19)}  [${item.source.padEnd(6)}] ${item.line}`).join("\n")
+    ? filtered.map((item) => `${(item.at || "").slice(11, 19) || "--:--:--"}  [${(item.source || "server").padEnd(6)}] ${item.line}`).join("\n")
     : "Esperando eventos…";
   $("#log-output").scrollTop = $("#log-output").scrollHeight;
+}
+
+function updateLogViewMeta(filter) {
+  const titles = {
+    all: "dragonwilds.log (Todos los registros)",
+    server: "RSDragonwilds.log (Servidor de Juego)",
+    panel: "panel.log (Panel de Control)",
+    vpn: "vpn.log (WireGuard VPN)",
+    backup: "backup.log (Copias de Seguridad)",
+    world: "world.log (Gestor de Mundos)",
+  };
+  const titleSpan = $(".terminal-bar span");
+  if (titleSpan) {
+    titleSpan.textContent = titles[filter] || "dragonwilds.log";
+  }
+  const downloadBtn = $("#download-log-btn");
+  if (downloadBtn) {
+    downloadBtn.href = `/api/logs/download?source=${encodeURIComponent(filter)}`;
+    downloadBtn.setAttribute("download", filter === "server" ? "RSDragonwilds.log" : `dragonwilds-${filter}.log`);
+  }
+}
+
+async function loadLogs(source = app.activeLogFilter) {
+  try {
+    const data = await api(`/api/logs?source=${encodeURIComponent(source)}&limit=300`);
+    if (data && Array.isArray(data.logs)) {
+      if (source === "all") {
+        app.logs = data.logs;
+      } else {
+        const otherLogs = (app.logs || []).filter((l) => (l.source || "").toLowerCase() !== source.toLowerCase());
+        app.logs = [...otherLogs, ...data.logs].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+      }
+      renderLogs(app.logs);
+    }
+  } catch (err) {
+    console.warn("No se pudieron cargar registros:", err);
+  }
 }
 
 function initLogStream() {
@@ -622,12 +665,15 @@ function initLogStream() {
           loadPlayers();
           return;
         }
+        if (!app.logs) app.logs = [];
+        app.logs.push(data);
+        if (app.logs.length > 2000) app.logs.shift();
         if (!app.status) app.status = { logs: [] };
         if (!app.status.logs) app.status.logs = [];
         app.status.logs.push(data);
-        if (app.status.logs.length > 1000) app.status.logs.shift();
-        renderLogs(app.status.logs);
-        renderActivity(app.status.logs);
+        if (app.status.logs.length > 200) app.status.logs.shift();
+        renderLogs(app.logs);
+        renderActivity(app.logs);
       } catch {}
     };
     es.onerror = () => {
@@ -1172,14 +1218,22 @@ $("#world-rules-form")?.addEventListener("submit", async (event) => {
 
 // Category filters for logs
 $$(".log-filter").forEach((btn) => {
-  btn.addEventListener("click", () => {
+  btn.addEventListener("click", async () => {
     $$(".log-filter").forEach((b) => b.classList.remove("active", "dark"));
     $$(".log-filter").forEach((b) => b.classList.add("ghost"));
     btn.classList.add("active", "dark");
     btn.classList.remove("ghost");
     app.activeLogFilter = btn.dataset.filter || "all";
-    renderLogs(app.status?.logs || []);
+    updateLogViewMeta(app.activeLogFilter);
+    await loadLogs(app.activeLogFilter);
   });
+});
+
+// Limpiar vista de registros
+$("#clear-log-view")?.addEventListener("click", () => {
+  app.localLogClearedAt = Date.now();
+  renderLogs(app.logs);
+  toast("Vista de registros limpiada.");
 });
 
 // Players modal and actions

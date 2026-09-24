@@ -1,6 +1,7 @@
 import { createReadStream, createWriteStream } from "node:fs";
 import {
   access,
+  appendFile,
   chmod,
   chown,
   copyFile,
@@ -324,7 +325,15 @@ export class Runtime extends EventEmitter {
     this.serverMessage = "Sin configurar";
     this.startedAt = null;
     this.logs = [];
+    this.categoryLogs = {
+      server: [],
+      panel: [],
+      vpn: [],
+      backup: [],
+      world: [],
+    };
     this.onlinePlayers = new Map();
+    this.knownPlayerNames = new Map();
     this.operation = Promise.resolve();
     this.backupScheduleTimer = null;
     this.vpnWatchdogTimer = null;
@@ -362,6 +371,28 @@ export class Runtime extends EventEmitter {
         await atomicWrite(SETTINGS_FILE, `${JSON.stringify(this.settings, null, 2)}\n`);
       } catch {}
     }
+    const panelActivityFile = join(DATA_DIR, "panel-activity.log");
+    if (await exists(panelActivityFile)) {
+      try {
+        const content = await readFile(panelActivityFile, "utf8");
+        const lines = content.split("\n").filter(Boolean).slice(-500);
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line);
+            if (entry && entry.source && entry.line) {
+              this.logs.push(entry);
+              const cat = (entry.source || "panel").toLowerCase();
+              if (!this.categoryLogs[cat]) this.categoryLogs[cat] = [];
+              this.categoryLogs[cat].push(entry);
+            }
+          } catch {}
+        }
+        if (content.length > 2 * 1024 * 1024) {
+          const keep = lines.join("\n") + "\n";
+          await writeFile(panelActivityFile, keep, "utf8").catch(() => {});
+        }
+      } catch {}
+    }
     if (this.settings.networkMode === "wireguard" && this.settings.vpn?.privateKey) {
       try {
         await this.writeWireGuardConfig();
@@ -387,8 +418,27 @@ export class Runtime extends EventEmitter {
     let safe = String(line).replace(/[\r\n]+$/, "");
     for (const secret of secretValues) safe = safe.split(secret).join("[SECRETO]");
     const entry = { at: new Date().toISOString(), source, line: safe.slice(0, 4000) };
+
+    // Buffer general consolidado
     this.logs.push(entry);
-    if (this.logs.length > 1000) this.logs.splice(0, this.logs.length - 1000);
+    if (this.logs.length > 3000) this.logs.splice(0, this.logs.length - 3000);
+
+    // Buffer específico por categoría para garantizar que eventos de panel/vpn/backup/world no se pierdan
+    const cat = (source || "panel").toLowerCase();
+    if (!this.categoryLogs[cat]) {
+      this.categoryLogs[cat] = [];
+    }
+    this.categoryLogs[cat].push(entry);
+    const maxCat = cat === "server" ? 2000 : 500;
+    if (this.categoryLogs[cat].length > maxCat) {
+      this.categoryLogs[cat].splice(0, this.categoryLogs[cat].length - maxCat);
+    }
+
+    // Persistir eventos no-servidor para que sobrevivan reinicios
+    if (cat !== "server") {
+      const panelActivityFile = join(DATA_DIR, "panel-activity.log");
+      appendFile(panelActivityFile, `${JSON.stringify(entry)}\n`).catch(() => {});
+    }
 
     // Detección reactiva de jugadores en línea (evita duplicar eventos de handshake y sesión)
     const matcherMatch = safe.match(/LogDomMatcherSession: Player ADDED to session \[([0-9a-fA-F]+)\]-\[?([^\]\r\n]+)\]?/i);
@@ -398,6 +448,8 @@ export class Runtime extends EventEmitter {
       const userId = matcherMatch[1];
       const userName = matcherMatch[2].replace(/"/g, "").trim();
       const lowerName = userName.toLowerCase();
+
+      this.knownPlayerNames.set(userId.toLowerCase(), userName);
 
       // Limpiar cualquier entrada previa o temporal con el mismo nombre o placeholder
       for (const [existingId, p] of this.onlinePlayers.entries()) {
@@ -442,23 +494,45 @@ export class Runtime extends EventEmitter {
       }
     }
 
-    const leaveMatch = safe.match(/LogDomMatcherSession: Player Removed from session \[([0-9a-fA-F]+)\]/i)
-      || safe.match(/ClientRequestDisconnect : DisconnectMe .* Character Name\[([^\]]+)\]/i)
-      || safe.match(/UNetConnection::Close:.*PlayerName:\s*([^\r\n,]+)/i);
-    if (leaveMatch) {
-      const key = leaveMatch[1].trim();
-      const lowerKey = key.toLowerCase();
+    // Detección reactiva de desconexión de jugadores
+    const noPlayerPause = /LogDomGameMode: Requested pausing as we have no player connected/i.test(safe);
+    const matcherLeave = safe.match(/LogDomMatcherSession: Player Removed from session \[([0-9a-fA-F]+)\](?:-\[?([^\]\r\n]+)\]?)?/i);
+    const netClose = safe.match(/LogNet: (?:UNetConnection::Close|UNetDriver::RemoveClientConnection):?.*UniqueId:\s*RedpointEOS:([0-9a-fA-F]+)/i);
+    const clientDisconnect = safe.match(/ClientRequestDisconnect.*Account\[XP:([0-9a-fA-F]+)\].*Character Name\[([^\]]+)\]/i)
+      || safe.match(/ClientRequestDisconnect.*Character Name\[([^\]]+)\]/i);
+
+    if (noPlayerPause) {
+      if (this.onlinePlayers.size > 0) {
+        this.onlinePlayers.clear();
+        this.emit("players", {
+          onlinePlayers: [],
+          playerCount: 0,
+        });
+      }
+    } else if (matcherLeave || netClose || clientDisconnect) {
+      const rawTargetId = matcherLeave?.[1] || netClose?.[1] || (clientDisconnect && clientDisconnect[2] ? clientDisconnect[1] : null);
+      const rawTargetName = matcherLeave?.[2] || (clientDisconnect ? (clientDisconnect[2] || clientDisconnect[1]) : null);
+      const cleanTargetId = rawTargetId ? rawTargetId.replace(/[\[\]"']/g, "").trim() : null;
+      const cleanTargetName = rawTargetName ? rawTargetName.replace(/[\[\]"']/g, "").trim() : null;
+      const resolvedName = cleanTargetName || (cleanTargetId ? this.knownPlayerNames.get(cleanTargetId.toLowerCase()) : null);
+
       let changed = false;
       for (const [uid, p] of this.onlinePlayers.entries()) {
-        if (
-          uid.toLowerCase() === lowerKey ||
-          p.userName.toLowerCase() === lowerKey ||
-          uid.toLowerCase() === `player-${lowerKey}`
-        ) {
+        const uidLower = uid.toLowerCase();
+        const pNameLower = (p.userName || "").toLowerCase();
+        const matchId = cleanTargetId && (uidLower === cleanTargetId.toLowerCase() || uidLower === `player-${cleanTargetId.toLowerCase()}`);
+        const matchName = resolvedName && (
+          pNameLower === resolvedName.toLowerCase() ||
+          uidLower === resolvedName.toLowerCase() ||
+          uidLower === `player-${resolvedName.toLowerCase()}`
+        );
+
+        if (matchId || matchName) {
           this.onlinePlayers.delete(uid);
           changed = true;
         }
       }
+
       if (changed) {
         this.emit("players", {
           onlinePlayers: Array.from(this.onlinePlayers.values()),
@@ -468,6 +542,16 @@ export class Runtime extends EventEmitter {
     }
 
     this.emit("log", entry);
+  }
+
+  getLogs(source = "all", limit = 200) {
+    const lim = Math.max(1, Math.min(Number(limit) || 200, 2000));
+    const safeSource = (source || "all").toLowerCase();
+    if (safeSource !== "all") {
+      const list = this.categoryLogs[safeSource] || [];
+      return list.slice(-lim);
+    }
+    return this.logs.slice(-lim);
   }
 
   enqueue(fn) {
@@ -951,6 +1035,12 @@ export class Runtime extends EventEmitter {
       });
     }
 
+    for (const p of playersMap.values()) {
+      if (p.userId && p.userName) {
+        this.knownPlayerNames.set(p.userId.toLowerCase(), p.userName);
+      }
+    }
+
     const knownPlayers = Array.from(playersMap.values()).map((p) => {
       const isOnline = this.onlinePlayers.has(p.userId) ||
         [...this.onlinePlayers.values()].some((op) => op.userName.toLowerCase() === p.userName.toLowerCase());
@@ -1380,7 +1470,7 @@ export class Runtime extends EventEmitter {
       playerCount: (knownData.onlinePlayers || Array.from(this.onlinePlayers.values())).length,
       maxPlayers: 6,
       metrics,
-      logs: this.logs.slice(-120),
+      logs: this.getLogs("all", 150),
     };
   }
 }

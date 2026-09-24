@@ -177,11 +177,77 @@ test("Runtime detecta reactivamente jugadores online y desconexiones desde logs"
   rt.addLog("server", "LogNet: Join succeeded: ChamapTV");
   assert.equal(rt.onlinePlayers.size, 2);
 
-  // Primer jugador desconecta
-  rt.addLog("server", "LogDomMatcherSession: Player Removed from session [00025be9182947128e2c6f899f51e1ba]");
+  // Primer jugador desconecta con el formato real que incluye nombre: [00025be9182947128e2c6f899f51e1ba]-[ChamapTV]
+  rt.addLog("server", "LogDomMatcherSession: Player Removed from session [00025be9182947128e2c6f899f51e1ba]-[ChamapTV]");
   assert.equal(rt.onlinePlayers.size, 1);
   assert.equal(rt.onlinePlayers.has("00025be9182947128e2c6f899f51e1ba"), false);
   assert.equal(rt.onlinePlayers.has("0002bd4a6d3043d2b4c24f9b074a5d92"), true);
+
+  // Segundo jugador desconecta por caída de conexión o cierre abrupto (UNetConnection::Close con UniqueId: RedpointEOS:...)
+  rt.addLog("server", "LogNet: UNetConnection::Close: [UNetConnection] RemoteAddr: 179.49.51.11:57841, UniqueId: RedpointEOS:0002bd4a6d3043d2b4c24f9b074a5d92");
+  assert.equal(rt.onlinePlayers.size, 0);
+
+  // Tercer caso: jugador que sólo tuvo LogNet inicial y desconecta por ClientRequestDisconnect con Account y Character Name
+  rt.addLog("server", "LogNet: Join succeeded: playerThree");
+  assert.equal(rt.onlinePlayers.size, 1);
+  rt.addLog("server", "LogDominionPlayerController: ClientRequestDisconnect : DisconnectMe : PlayerStateSave result[true] - state saved for Account[XP:000299e8be034a28a0e01be52fc967c8] Character Name[playerThree]");
+  assert.equal(rt.onlinePlayers.size, 0);
+
+  // Cuarto caso: jugador que desconecta por UNetDriver::RemoveClientConnection
+  rt.addLog("server", "LogDomMatcherSession: Player ADDED to session [0002d8eb1f3b4bf3bd3210b9dea9c490]-[ernexto]");
+  assert.equal(rt.onlinePlayers.size, 1);
+  rt.addLog("server", "LogNet: UNetDriver::RemoveClientConnection - Removed address 10.8.0.1:9624 from MappedClientConnections for: [UNetConnection] RemoteAddr: 10.8.0.1:9624, UniqueId: RedpointEOS:0002d8eb1f3b4bf3bd3210b9dea9c490");
+  assert.equal(rt.onlinePlayers.size, 0);
+
+  // Quinto caso: fallback de seguridad cuando el servidor pausa el juego al no haber jugadores conectados
+  rt.addLog("server", "LogNet: Join succeeded: ghostUser");
+  assert.equal(rt.onlinePlayers.size, 1);
+  rt.addLog("server", "[2026.09.21-21.51.05:254][718]LogDomGameMode: Requested pausing as we have no player connected");
+  assert.equal(rt.onlinePlayers.size, 0);
+});
+
+test("Runtime aísla registros por categoría y no permite que el servidor de juego canibalice panel/vpn/backup/world", async () => {
+  const { Runtime } = await import("../src/runtime.js");
+  const rt = new Runtime();
+
+  // Registrar eventos en varias categorías
+  rt.addLog("panel", "Panel inicializado");
+  rt.addLog("vpn", "Túnel wg-vps activado.");
+  rt.addLog("backup", "Backup creado: test-backup.tar.gz");
+  rt.addLog("world", "Mundo activo fijado en [Chavito]");
+
+  // Simular avalancha de cientos de registros del servidor de juego
+  for (let i = 0; i < 500; i++) {
+    rt.addLog("server", `[Server tick ${i}] LogNet: Ping received`);
+  }
+
+  // Verificar que getLogs por categoría preserva intactos los registros de cada categoría
+  const panelLogs = rt.getLogs("panel");
+  assert.equal(panelLogs.length, 1);
+  assert.equal(panelLogs[0].line, "Panel inicializado");
+
+  const vpnLogs = rt.getLogs("vpn");
+  assert.equal(vpnLogs.length, 1);
+  assert.equal(vpnLogs[0].line, "Túnel wg-vps activado.");
+
+  const backupLogs = rt.getLogs("backup");
+  assert.equal(backupLogs.length, 1);
+  assert.equal(backupLogs[0].line, "Backup creado: test-backup.tar.gz");
+
+  const worldLogs = rt.getLogs("world");
+  assert.equal(worldLogs.length, 1);
+  assert.equal(worldLogs[0].line, "Mundo activo fijado en [Chavito]");
+
+  const serverLogs = rt.getLogs("server", 100);
+  assert.equal(serverLogs.length, 100);
+
+  // Buffer consolidado "all"
+  const allLogs = rt.getLogs("all", 600);
+  assert.ok(allLogs.length > 500);
+  assert.ok(allLogs.some((l) => l.source === "panel"));
+  assert.ok(allLogs.some((l) => l.source === "vpn"));
+  assert.ok(allLogs.some((l) => l.source === "backup"));
+  assert.ok(allLogs.some((l) => l.source === "world"));
 });
 
 test("Runtime.getMetrics devuelve estructura de telemetría completa", async () => {
@@ -309,6 +375,34 @@ test("Runtime valida y sincroniza platformPolicy hacia DedicatedServer.ini y ent
   assert.equal(env.RSDW_PLATFORM_POLICY, "PlayStation");
 
   await rm(tempDir, { recursive: true, force: true });
+});
+
+test("Runtime.getLogs filtra por categoría, respeta límites y enmascara secretos", async () => {
+  const { Runtime } = await import("../src/runtime.js");
+  const rt = new Runtime();
+  rt.settings.adminPassword = "SuperAdminPassword123";
+  rt.settings.worldPassword = "SecretWorldPassword456";
+
+  rt.addLog("panel", "Admin inició sesión con SuperAdminPassword123");
+  rt.addLog("server", "Conexión con password SecretWorldPassword456 exitosa");
+
+  const panelLogs = rt.getLogs("panel");
+  assert.equal(panelLogs.length, 1);
+  assert.equal(panelLogs[0].line, "Admin inició sesión con [SECRETO]");
+
+  const serverLogs = rt.getLogs("server");
+  assert.equal(serverLogs.length, 1);
+  assert.equal(serverLogs[0].line, "Conexión con password [SECRETO] exitosa");
+
+  // Límites
+  for (let i = 0; i < 20; i++) rt.addLog("backup", `Backup ${i}`);
+  const limited = rt.getLogs("backup", 5);
+  assert.equal(limited.length, 5);
+  assert.equal(limited[4].line, "Backup 19");
+
+  // Categoría inexistente retorna array vacío
+  const unknown = rt.getLogs("unknown_category");
+  assert.deepEqual(unknown, []);
 });
 
 
