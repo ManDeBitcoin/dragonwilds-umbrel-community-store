@@ -10,10 +10,10 @@ export const GAME_MODE_LABELS = {
 };
 
 export const DIFFICULTY_LABELS = {
-  0: "Personalizado",
-  1: "Normal",
+  0: "Normal",
+  1: "Difícil",
   2: "Creativo",
-  3: "Difícil",
+  3: "Personalizado",
 };
 
 export const PVP_LABELS = {
@@ -130,10 +130,11 @@ function parseTaggedProperty(buffer, propName) {
           const enumValFStr = readFString(buffer, valOffset);
           if (enumValFStr) {
             const str = enumValFStr.value.toLowerCase();
-            let numVal = 1;
-            if (str.includes("easy") || str.includes("0")) numVal = 0;
-            else if (str.includes("hard") || str.includes("difficult") || str.includes("2")) numVal = 2;
-            else if (str.includes("normal") || str.includes("1")) numVal = 1;
+            let numVal = 0;
+            if (str.includes("hard") || str.includes("difficult") || str.includes("1")) numVal = 1;
+            else if (str.includes("creative") || str.includes("2")) numVal = 2;
+            else if (str.includes("custom") || str.includes("3")) numVal = 3;
+            else if (str.includes("normal") || str.includes("easy") || str.includes("0")) numVal = 0;
 
             return { found: true, type: "enum", valOffset, value: numVal };
           }
@@ -282,7 +283,7 @@ export function inspectDragonwildsBinary(buffer) {
       format: "dragonwilds",
       gameMode,
       gameModeLabel: GAME_MODE_LABELS[gameMode] || "Estándar",
-      difficulty: (diff >= 0 && diff <= 3) ? diff : 1,
+      difficulty: (diff >= 0 && diff <= 3) ? diff : 0,
       difficultyLabel: DIFFICULTY_LABELS[diff] || "Normal",
       pvpEnabled: Boolean(pvp),
       pvpLabel: pvp ? PVP_LABELS[1] : PVP_LABELS[0],
@@ -318,7 +319,7 @@ export function inspectWorldSave(buffer) {
   const pvpResult = inspectProperty(buffer, ["FriendlyFire", "bFriendlyFire", "PvpEnabled", "PVPEnabled", "bPvPEnabled"], "pvp");
 
   const detected = diffResult.found || pvpResult.found;
-  const difficulty = diffResult.found ? diffResult.value : 1;
+  const difficulty = diffResult.found ? diffResult.value : 0;
   const pvpEnabled = pvpResult.found ? Boolean(pvpResult.value) : false;
 
   return {
@@ -469,8 +470,8 @@ export async function readWorldRulesFromFile(filePath) {
       detected: false,
       gameMode: 1,
       gameModeLabel: GAME_MODE_LABELS[1],
-      difficulty: 1,
-      difficultyLabel: DIFFICULTY_LABELS[1],
+      difficulty: 0,
+      difficultyLabel: DIFFICULTY_LABELS[0],
       pvpEnabled: false,
       pvpLabel: PVP_LABELS[0],
       crossplayEnabled: true,

@@ -104,55 +104,55 @@ function createGvasSaveBuffer(difficulty = 2, pvp = 1) {
 test("detecta reglas por defecto cuando el buffer no contiene datos", () => {
   const empty = Buffer.alloc(100);
   const result = inspectWorldSave(empty);
-  assert.equal(result.difficulty, 1);
+  assert.equal(result.difficulty, 0);
   assert.equal(result.difficultyLabel, "Normal");
   assert.equal(result.pvpEnabled, false);
 });
 
 test("inspecciona correctamente dificultad y PvP desde un buffer simulado", () => {
-  const buf = createMockSaveBuffer(3, 1); // Difícil (3), PvP activo
+  const buf = createMockSaveBuffer(1, 1); // Difícil (1), PvP activo
   const result = inspectWorldSave(buf);
   assert.equal(result.detected, true);
-  assert.equal(result.difficulty, 3);
+  assert.equal(result.difficulty, 1);
   assert.equal(result.difficultyLabel, "Difícil");
   assert.equal(result.pvpEnabled, true);
   assert.equal(result.pvpLabel, PVP_LABELS[1]);
 });
 
 test("inspecciona correctamente formato real de Unreal Engine GVAS (ej. Chavito: Difícil + JcJ Activo)", () => {
-  const gvasBuf = createGvasSaveBuffer(3, 1); // Difícil (3), PvP Activo (1)
+  const gvasBuf = createGvasSaveBuffer(1, 1); // Difícil (1), PvP Activo (1)
   const result = inspectWorldSave(gvasBuf);
   assert.equal(result.detected, true);
-  assert.equal(result.difficulty, 3);
+  assert.equal(result.difficulty, 1);
   assert.equal(result.difficultyLabel, "Difícil");
   assert.equal(result.pvpEnabled, true);
   assert.equal(result.pvpLabel, PVP_LABELS[1]);
 });
 
 test("parchea buffer real GVAS modificando dificultad y PvP y lo verifica", () => {
-  const gvasBuf = createGvasSaveBuffer(2, 1); // Difícil + JcJ
+  const gvasBuf = createGvasSaveBuffer(1, 1); // Difícil + JcJ
   const patched = patchWorldSave(gvasBuf, { difficulty: 0, pvpEnabled: false });
   assert.equal(patched.modified, true);
 
   const inspected = inspectWorldSave(patched.buffer);
   assert.equal(inspected.difficulty, 0);
-  assert.equal(inspected.difficultyLabel, "Personalizado");
+  assert.equal(inspected.difficultyLabel, "Normal");
   assert.equal(inspected.pvpEnabled, false);
   assert.equal(inspected.pvpLabel, PVP_LABELS[0]);
 });
 
 test("parchea dificultad y PvP modificando los bytes correspondientes en buffer simulado", () => {
-  const initial = createMockSaveBuffer(1, 0); // Normal, Coop
+  const initial = createMockSaveBuffer(0, 0); // Normal, Coop
   const inspectedBefore = inspectWorldSave(initial);
-  assert.equal(inspectedBefore.difficulty, 1);
+  assert.equal(inspectedBefore.difficulty, 0);
   assert.equal(inspectedBefore.pvpEnabled, false);
 
-  const patched = patchWorldSave(initial, { difficulty: 0, pvpEnabled: true });
+  const patched = patchWorldSave(initial, { difficulty: 1, pvpEnabled: true });
   assert.equal(patched.modified, true);
 
   const inspectedAfter = inspectWorldSave(patched.buffer);
-  assert.equal(inspectedAfter.difficulty, 0);
-  assert.equal(inspectedAfter.difficultyLabel, "Personalizado");
+  assert.equal(inspectedAfter.difficulty, 1);
+  assert.equal(inspectedAfter.difficultyLabel, "Difícil");
   assert.equal(inspectedAfter.pvpEnabled, true);
   assert.equal(inspectedAfter.pvpLabel, PVP_LABELS[1]);
 });
@@ -162,18 +162,18 @@ test("lee y actualiza reglas directamente en archivos del disco", async () => {
   const saveFile = join(tempDir, "Chavito.sav");
 
   try {
-    const mock = createGvasSaveBuffer(3, 1);
+    const mock = createGvasSaveBuffer(1, 1);
     await writeFile(saveFile, mock);
 
     const initialRules = await readWorldRulesFromFile(saveFile);
-    assert.equal(initialRules.difficulty, 3);
+    assert.equal(initialRules.difficulty, 1);
     assert.equal(initialRules.difficultyLabel, "Difícil");
     assert.equal(initialRules.pvpEnabled, true);
 
-    await updateWorldRulesInFile(saveFile, { difficulty: 1, pvpEnabled: false });
+    await updateWorldRulesInFile(saveFile, { difficulty: 0, pvpEnabled: false });
 
     const updatedRules = await readWorldRulesFromFile(saveFile);
-    assert.equal(updatedRules.difficulty, 1);
+    assert.equal(updatedRules.difficulty, 0);
     assert.equal(updatedRules.difficultyLabel, "Normal");
     assert.equal(updatedRules.pvpEnabled, false);
   } finally {
@@ -222,15 +222,16 @@ test("inspecciona y parchea formato nativo SAVE/CINF/PROP de Dragonwilds", async
   assert.equal(inspected.detected, true);
   assert.equal(inspected.format, "dragonwilds");
   assert.equal(inspected.difficulty, 1);
+  assert.equal(inspected.difficultyLabel, "Difícil");
   assert.equal(inspected.pvpEnabled, true);
 
-  // Parchear a Dificil (3) y PvP Desactivado (0)
-  const patched = patchWorldSave(nativeBuf, { difficulty: 3, pvpEnabled: false });
+  // Parchear a Normal (0) y PvP Desactivado (0)
+  const patched = patchWorldSave(nativeBuf, { difficulty: 0, pvpEnabled: false });
   assert.equal(patched.modified, true);
 
   const reInspected = inspectWorldSave(patched.buffer);
-  assert.equal(reInspected.difficulty, 3);
-  assert.equal(reInspected.difficultyLabel, "Difícil");
+  assert.equal(reInspected.difficulty, 0);
+  assert.equal(reInspected.difficultyLabel, "Normal");
   assert.equal(reInspected.pvpEnabled, false);
 });
 
@@ -267,10 +268,10 @@ test("inspecciona y parchea todos los parámetros customizables (Modo Hardcore, 
   offBuf.writeInt32LE(13, 20); // End at 13
   parts.push(offBuf);
 
-  // Payload inicial: Coop (0), Normal (1), Estándar (1), Crossplay ON (1)
+  // Payload inicial: Coop (0), Normal (0), Estándar (1), Crossplay ON (1)
   const payload = Buffer.alloc(13);
   payload.writeUInt8(0, 0);    // FriendlyFire = 0
-  payload.writeInt32LE(1, 1);  // SurvivalDifficulty = 1 (Normal)
+  payload.writeInt32LE(0, 1);  // SurvivalDifficulty = 0 (Normal)
   payload.writeInt32LE(1, 5);  // HardcoreState = 1 (Estándar)
   payload.writeInt32LE(1, 9);  // CrossplayEnabled = 1
   parts.push(payload);
@@ -280,14 +281,15 @@ test("inspecciona y parchea todos los parámetros customizables (Modo Hardcore, 
   assert.equal(initial.detected, true);
   assert.equal(initial.gameMode, 1);
   assert.equal(initial.gameModeLabel, "Estándar (Supervivencia)");
-  assert.equal(initial.difficulty, 1);
+  assert.equal(initial.difficulty, 0);
+  assert.equal(initial.difficultyLabel, "Normal");
   assert.equal(initial.pvpEnabled, false);
   assert.equal(initial.crossplayEnabled, true);
 
-  // Parchear a Hardcore (2), Difícil (3), JcJ activado (true), Crossplay OFF (false)
+  // Parchear a Hardcore (2), Difícil (1), JcJ activado (true), Crossplay OFF (false)
   const patched = patchWorldSave(nativeBuf, {
     gameMode: 2,
-    difficulty: 3,
+    difficulty: 1,
     pvpEnabled: true,
     crossplayEnabled: false,
   });
@@ -296,7 +298,7 @@ test("inspecciona y parchea todos los parámetros customizables (Modo Hardcore, 
   const reInspected = inspectWorldSave(patched.buffer);
   assert.equal(reInspected.gameMode, 2);
   assert.equal(reInspected.gameModeLabel, "Hardcore (Muerte definitiva)");
-  assert.equal(reInspected.difficulty, 3);
+  assert.equal(reInspected.difficulty, 1);
   assert.equal(reInspected.difficultyLabel, "Difícil");
   assert.equal(reInspected.pvpEnabled, true);
   assert.equal(reInspected.pvpLabel, "Activado (JcJ / Fuego amigo)");

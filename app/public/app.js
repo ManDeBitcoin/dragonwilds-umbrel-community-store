@@ -13,6 +13,8 @@ const app = {
   logEventSource: null,
   poller: null,
   fastPoller: null,
+  worldRulesLoaded: false,
+  worldRulesDirty: false,
   localLogClearedAt: 0,
   cpuHistory: [],
   ramHistory: [],
@@ -414,8 +416,14 @@ function renderWorlds(worlds) {
       ? currentVal
       : ((worlds.find((w) => w.active) || worlds[0]).baseName || (worlds.find((w) => w.active) || worlds[0]).name.replace(/\.sav$/i, ""));
 
+    const prevTarget = worldSelect.value;
     worldSelect.value = targetBase;
-    loadWorldRulesIntoForm(targetBase, worlds);
+    if (!app.worldRulesLoaded || (prevTarget && prevTarget !== targetBase)) {
+      if (!app.worldRulesDirty) {
+        loadWorldRulesIntoForm(targetBase, worlds);
+        app.worldRulesLoaded = true;
+      }
+    }
   }
 
   $("#world-list").innerHTML = worlds.length ? worlds.map((world) => {
@@ -507,6 +515,19 @@ function loadWorldRulesIntoForm(worldName, worldsList = app.status?.worlds || []
     crossplayToggle.checked = crossplayVal;
     updateCrossplayToggleLabels(crossplayVal);
   }
+
+  app.worldRulesDirty = false;
+  updateUnsavedRulesIndicator();
+}
+
+function markRulesFormDirty() {
+  app.worldRulesDirty = true;
+  updateUnsavedRulesIndicator();
+}
+
+function updateUnsavedRulesIndicator() {
+  const badge = $("#rules-unsaved-badge");
+  if (badge) badge.classList.toggle("hidden", !app.worldRulesDirty);
 }
 
 function updatePvpToggleLabels(checked) {
@@ -1072,12 +1093,17 @@ $("#rules-activate-btn")?.addEventListener("click", () => {
   if (targetWorld) activateWorld(targetWorld);
 });
 
+$("#rules-mode-select")?.addEventListener("change", markRulesFormDirty);
+$("#rules-difficulty-select")?.addEventListener("change", markRulesFormDirty);
+
 $("#rules-pvp-toggle")?.addEventListener("change", (event) => {
   updatePvpToggleLabels(event.target.checked);
+  markRulesFormDirty();
 });
 
 $("#rules-crossplay-toggle")?.addEventListener("change", (event) => {
   updateCrossplayToggleLabels(event.target.checked);
+  markRulesFormDirty();
 });
 
 $("#world-rules-form")?.addEventListener("submit", async (event) => {
@@ -1089,12 +1115,12 @@ $("#world-rules-form")?.addEventListener("submit", async (event) => {
   }
 
   const gameMode = Number($("#rules-mode-select")?.value ?? 1);
-  const difficulty = Number($("#rules-difficulty-select")?.value ?? 1);
+  const difficulty = Number($("#rules-difficulty-select")?.value ?? 0);
   const pvpEnabled = Boolean($("#rules-pvp-toggle")?.checked);
   const crossplayEnabled = Boolean($("#rules-crossplay-toggle")?.checked);
 
   const modeName = gameMode === 2 ? "Hardcore (Muerte definitiva)" : gameMode === 3 ? "Creativo" : "Estándar";
-  const diffName = difficulty === 1 ? "Normal" : difficulty === 3 ? "Difícil" : difficulty === 2 ? "Creativo" : "Personalizado";
+  const diffName = difficulty === 1 ? "Difícil" : difficulty === 2 ? "Creativo" : difficulty === 3 ? "Personalizado" : "Normal";
 
   const confirmed = await confirmAction(
     "Guardar reglas del mundo",
@@ -1114,6 +1140,8 @@ $("#world-rules-form")?.addEventListener("submit", async (event) => {
       body: JSON.stringify({ gameMode, difficulty, pvpEnabled, crossplayEnabled }),
     });
     toast("¡Reglas aplicadas con éxito!");
+    app.worldRulesDirty = false;
+    updateUnsavedRulesIndicator();
     await refreshStatus(false);
   } catch (error) {
     showError(error);

@@ -273,10 +273,10 @@
                   <label>
                     <span>Dificultad de la partida</span>
                     <select id="rules-difficulty-select" name="difficulty">
-                      <option value="1">Normal (Equilibrado, estándar recomendado)</option>
-                      <option value="3">Difícil (Enemigos letales, supervivencia exigente)</option>
+                      <option value="0">Normal (Equilibrado, estándar recomendado)</option>
+                      <option value="1">Difícil (Enemigos letales, supervivencia exigente)</option>
                       <option value="2">Creativo (Construcción libre, sin supervivencia)</option>
-                      <option value="0">Personalizado (Reglas avanzadas)</option>
+                      <option value="3">Personalizado (Reglas avanzadas)</option>
                     </select>
                   </label>
                   <p class="fineprint" style="margin-top: 0.65rem;">
@@ -319,7 +319,10 @@
                 <p class="fineprint" style="margin: 0;">
                   <b>Seguridad automática:</b> Al guardar se genera un backup de retorno y se actualizan los archivos de partida y configuración.
                 </p>
-                <button type="submit" id="save-rules-btn" class="button primary">Guardar y aplicar reglas</button>
+                <div style="display: flex; align-items: center; gap: 0.8rem;">
+                  <span id="rules-unsaved-badge" class="badge-tag amber hidden">Cambios sin guardar</span>
+                  <button type="submit" id="save-rules-btn" class="button primary">Guardar y aplicar reglas</button>
+                </div>
               </div>
             </form>
           </article>
