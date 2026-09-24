@@ -356,6 +356,88 @@ async function api(req, res, url) {
     return createReadStream(filePath).pipe(res);
   }
 
+  const backupDownloadMatch = url.pathname.match(/^\/api\/backups\/([^/]+)\/download$/);
+  if (req.method === "GET" && backupDownloadMatch) {
+    const name = decodeURIComponent(backupDownloadMatch[1]);
+    const filePath = runtime.safeBackupPath(name);
+    const fileInfo = await stat(filePath);
+    res.writeHead(200, {
+      "content-type": "application/gzip",
+      "content-length": fileInfo.size,
+      "content-disposition": `attachment; filename="${basename(filePath)}"`,
+      "cache-control": "no-store",
+    });
+    return createReadStream(filePath).pipe(res);
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/players") {
+    return json(res, 200, await runtime.listKnownPlayers());
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/players") {
+    if (!requireMutation(req, res)) return;
+    const input = await bodyJson(req);
+    const player = await runtime.enqueue(() => runtime.addKnownPlayer(input));
+    return json(res, 201, player);
+  }
+
+  const playerMatch = url.pathname.match(/^\/api\/players\/([^/]+)$/);
+  if (req.method === "PUT" && playerMatch) {
+    if (!requireMutation(req, res)) return;
+    const userId = decodeURIComponent(playerMatch[1]);
+    const input = await bodyJson(req);
+    const updated = await runtime.enqueue(() => runtime.updateKnownPlayer(userId, input));
+    return json(res, 200, updated);
+  }
+
+  if (req.method === "DELETE" && playerMatch) {
+    if (!requireMutation(req, res)) return;
+    const userId = decodeURIComponent(playerMatch[1]);
+    await runtime.enqueue(() => runtime.removeKnownPlayer(userId));
+    return json(res, 200, { ok: true });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/logs/stream") {
+    res.writeHead(200, {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      "connection": "keep-alive",
+      "x-accel-buffering": "no",
+    });
+    res.write(`data: ${JSON.stringify({ type: "connected" })}\n\n`);
+    const onLog = (entry) => {
+      res.write(`data: ${JSON.stringify(entry)}\n\n`);
+    };
+    runtime.on("log", onLog);
+    req.on("close", () => {
+      runtime.off("log", onLog);
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/logs/download") {
+    const logPath = join(constants.SERVER_DIR, "RSDragonwilds", "Saved", "Logs", "RSDragonwilds.log");
+    try {
+      const fileInfo = await stat(logPath);
+      res.writeHead(200, {
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": fileInfo.size,
+        "content-disposition": 'attachment; filename="RSDragonwilds.log"',
+        "cache-control": "no-store",
+      });
+      return createReadStream(logPath).pipe(res);
+    } catch {
+      const text = runtime.logs.map((l) => `[${l.at}] [${l.source.toUpperCase()}] ${l.line}`).join("\n");
+      res.writeHead(200, {
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": Buffer.byteLength(text),
+        "content-disposition": 'attachment; filename="dragonwilds-panel.log"',
+        "cache-control": "no-store",
+      });
+      return res.end(text);
+    }
+  }
+
   return json(res, 404, { error: "Ruta API no encontrada." });
 }
 

@@ -234,3 +234,91 @@ test("inspecciona y parchea formato nativo SAVE/CINF/PROP de Dragonwilds", async
   assert.equal(reInspected.pvpEnabled, false);
 });
 
+test("inspecciona y parchea todos los parámetros customizables (Modo Hardcore, Dificultad, PvP, Crossplay) en formato Dragonwilds", async () => {
+  const parts = [];
+  parts.push(Buffer.from("SAVE", "ascii"));
+  parts.push(Buffer.alloc(60));
+
+  // CINF con 4 propiedades: FriendlyFire, SurvivalDifficulty, HardcoreState, CrossplayEnabled
+  const cinfStart = Buffer.alloc(12);
+  cinfStart.write("CINF", 0, "ascii");
+  cinfStart.writeInt32LE(200, 4);
+  cinfStart.writeInt32LE(4, 8); // 4 props
+  parts.push(cinfStart);
+
+  function writeStr(s) {
+    const b = Buffer.alloc(4 + s.length + 1);
+    b.writeInt32LE(s.length + 1, 0);
+    b.write(s, 4, "utf8");
+    return b;
+  }
+  parts.push(writeStr("FriendlyFire"));
+  parts.push(writeStr("SurvivalDifficulty"));
+  parts.push(writeStr("HardcoreState"));
+  parts.push(writeStr("CrossplayEnabled"));
+
+  // Offsets
+  const offBuf = Buffer.alloc(4 + 5 * 4);
+  offBuf.writeInt32LE(4, 0);
+  offBuf.writeInt32LE(0, 4);   // FriendlyFire at 0 (1 byte)
+  offBuf.writeInt32LE(1, 8);   // SurvivalDifficulty at 1 (4 bytes)
+  offBuf.writeInt32LE(5, 12);  // HardcoreState at 5 (4 bytes)
+  offBuf.writeInt32LE(9, 16);  // CrossplayEnabled at 9 (4 bytes)
+  offBuf.writeInt32LE(13, 20); // End at 13
+  parts.push(offBuf);
+
+  // Payload inicial: Coop (0), Normal (1), Estándar (1), Crossplay ON (1)
+  const payload = Buffer.alloc(13);
+  payload.writeUInt8(0, 0);    // FriendlyFire = 0
+  payload.writeInt32LE(1, 1);  // SurvivalDifficulty = 1 (Normal)
+  payload.writeInt32LE(1, 5);  // HardcoreState = 1 (Estándar)
+  payload.writeInt32LE(1, 9);  // CrossplayEnabled = 1
+  parts.push(payload);
+
+  const nativeBuf = Buffer.concat(parts);
+  const initial = inspectWorldSave(nativeBuf);
+  assert.equal(initial.detected, true);
+  assert.equal(initial.gameMode, 1);
+  assert.equal(initial.gameModeLabel, "Estándar (Supervivencia)");
+  assert.equal(initial.difficulty, 1);
+  assert.equal(initial.pvpEnabled, false);
+  assert.equal(initial.crossplayEnabled, true);
+
+  // Parchear a Hardcore (2), Difícil (3), JcJ activado (true), Crossplay OFF (false)
+  const patched = patchWorldSave(nativeBuf, {
+    gameMode: 2,
+    difficulty: 3,
+    pvpEnabled: true,
+    crossplayEnabled: false,
+  });
+  assert.equal(patched.modified, true);
+
+  const reInspected = inspectWorldSave(patched.buffer);
+  assert.equal(reInspected.gameMode, 2);
+  assert.equal(reInspected.gameModeLabel, "Hardcore (Muerte definitiva)");
+  assert.equal(reInspected.difficulty, 3);
+  assert.equal(reInspected.difficultyLabel, "Difícil");
+  assert.equal(reInspected.pvpEnabled, true);
+  assert.equal(reInspected.pvpLabel, "Activado (JcJ / Fuego amigo)");
+  assert.equal(reInspected.crossplayEnabled, false);
+  assert.equal(reInspected.crossplayLabel, "Deshabilitado");
+});
+
+test("inspecciona y valida las partidas reales Chavito.sav y ChamapTV.sav", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const chavitoPath = join(process.cwd(), "seed-data", "server", "RSDragonwilds", "Saved", "SaveGames", "Chavito.sav");
+
+  try {
+    const buf = await readFile(chavitoPath);
+    const inspected = inspectWorldSave(buf);
+    assert.equal(inspected.detected, true);
+    assert.equal(inspected.format, "dragonwilds");
+    assert.equal(typeof inspected.gameMode, "number");
+    assert.equal(typeof inspected.difficulty, "number");
+    assert.equal(typeof inspected.pvpEnabled, "boolean");
+    assert.equal(typeof inspected.crossplayEnabled, "boolean");
+  } catch (err) {
+    if (err.code !== "ENOENT") throw err;
+  }
+});
+

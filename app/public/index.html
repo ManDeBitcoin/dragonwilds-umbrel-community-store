@@ -3,18 +3,77 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#111714" />
-    <title>Dragonwilds Server</title>
+    <meta name="theme-color" content="#0b100e" />
+    <title>Dragonwilds Server Console</title>
     <link rel="icon" href="/mark.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css?v=0.1.3" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.6" />
   </head>
   <body>
+    <!-- SVG Symbol Sprite Library (Lucide style) -->
+    <svg style="display: none;" aria-hidden="true">
+      <symbol id="icon-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+      </symbol>
+      <symbol id="icon-world" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </symbol>
+      <symbol id="icon-players" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </symbol>
+      <symbol id="icon-backups" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+      </symbol>
+      <symbol id="icon-network" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 20v-6m0-4V4m-7 8h14M5 7l2-2m10 14 2-2M5 17l2 2m10-14 2 2"/>
+        <circle cx="12" cy="12" r="2"/>
+      </symbol>
+      <symbol id="icon-logs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>
+      </symbol>
+      <symbol id="icon-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
+      </symbol>
+      <symbol id="icon-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/>
+      </symbol>
+      <symbol id="icon-ram" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/><rect width="20" height="12" x="2" y="4" rx="2"/>
+      </symbol>
+      <symbol id="icon-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+      </symbol>
+      <symbol id="icon-sword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" x2="19" y1="19" y2="13"/><line x1="16" x2="20" y1="16" y2="20"/><line x1="19" x2="21" y1="21" y2="19"/>
+      </symbol>
+      <symbol id="icon-crown" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"/>
+      </symbol>
+      <symbol id="icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/>
+      </symbol>
+      <symbol id="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>
+      </symbol>
+      <symbol id="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+      </symbol>
+      <symbol id="icon-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" x2="12" y1="2" y2="12"/>
+      </symbol>
+      <symbol id="icon-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/>
+      </symbol>
+    </svg>
+
     <div id="toast" class="toast" aria-live="polite"></div>
 
     <main id="auth-view" class="auth-shell hidden">
       <section class="auth-card">
         <div class="brand-mark"><img src="/mark.svg" alt="" /></div>
-        <p class="eyebrow">UMBrel · servidor dedicado</p>
+        <p class="eyebrow">UMBREL · SERVIDOR DEDICADO</p>
         <h1>RuneScape:<br /><span>Dragonwilds</span></h1>
         <p id="auth-copy" class="muted">Accede al centro de control de tu mundo.</p>
         <form id="auth-form">
@@ -47,12 +106,13 @@
           <span><b>Dragonwilds</b><small>Server Console</small></span>
         </a>
         <nav id="nav">
-          <button data-page="overview" class="active"><span>⌂</span> Resumen</button>
-          <button data-page="world"><span>◇</span> Mundo</button>
-          <button data-page="backups"><span>↺</span> Backups</button>
-          <button data-page="network"><span>⌁</span> Red y VPN</button>
-          <button data-page="logs"><span>›_</span> Registros</button>
-          <button data-page="settings"><span>⚙</span> Ajustes</button>
+          <button data-page="overview" class="active"><svg class="nav-svg"><use href="#icon-home"/></svg> Resumen</button>
+          <button data-page="world"><svg class="nav-svg"><use href="#icon-world"/></svg> Mundo</button>
+          <button data-page="players"><svg class="nav-svg"><use href="#icon-players"/></svg> Jugadores</button>
+          <button data-page="backups"><svg class="nav-svg"><use href="#icon-backups"/></svg> Backups</button>
+          <button data-page="network"><svg class="nav-svg"><use href="#icon-network"/></svg> Red y VPN</button>
+          <button data-page="logs"><svg class="nav-svg"><use href="#icon-logs"/></svg> Registros</button>
+          <button data-page="settings"><svg class="nav-svg"><use href="#icon-settings"/></svg> Ajustes</button>
         </nav>
         <div class="sidebar-bottom">
           <div class="mini-health"><i id="side-dot"></i><span><b id="side-state">Comprobando</b><small id="side-detail">—</small></span></div>
@@ -67,7 +127,7 @@
             <h2 id="page-title">Resumen</h2>
           </div>
           <div class="top-actions">
-            <button id="refresh" class="icon-button" title="Actualizar">↻</button>
+            <button id="refresh" class="icon-button" title="Actualizar"><svg class="action-svg"><use href="#icon-refresh"/></svg></button>
             <button id="quick-restart" class="button ghost">Reiniciar</button>
             <button id="quick-toggle" class="button primary">Arrancar</button>
           </div>
@@ -89,10 +149,64 @@
               </div>
             </article>
             <div class="metric-grid">
-              <article class="metric panel"><span class="metric-icon green">⌁</span><small>WIREGUARD</small><strong id="vpn-state">—</strong><p id="vpn-detail">Sin datos</p></article>
-              <article class="metric panel"><span class="metric-icon amber">↺</span><small>ÚLTIMO BACKUP</small><strong id="backup-age">—</strong><p id="backup-detail">Sin backups</p></article>
-              <article class="metric panel"><span class="metric-icon red">◉</span><small>PUERTO DE JUEGO</small><strong id="game-port">23409</strong><p id="beacon-port">Baliza 24520 / UDP</p></article>
-              <article class="metric panel"><span class="metric-icon blue">◇</span><small>MUNDOS</small><strong id="world-count">0</strong><p>Guardados detectados</p></article>
+              <article class="metric panel metric-with-slots">
+                <div class="metric-header-row">
+                  <span class="metric-icon green"><svg class="metric-svg"><use href="#icon-players"/></svg></span>
+                  <div id="player-slots-indicator" class="slots-pill" title="Slots disponibles (Máximo oficial: 6)"></div>
+                </div>
+                <small>JUGADORES ONLINE</small>
+                <strong id="metric-online-players">0 / 6</strong>
+                <p id="metric-online-detail">Ninguno conectado</p>
+              </article>
+              <article class="metric panel">
+                <div class="metric-header-row">
+                  <span class="metric-icon green"><svg class="metric-svg"><use href="#icon-network"/></svg></span>
+                  <span id="vpn-health-badge" class="badge-mini online">SALUDABLE</span>
+                </div>
+                <small>WIREGUARD</small>
+                <strong id="vpn-state">—</strong>
+                <p id="vpn-detail">Sin datos</p>
+              </article>
+              <article class="metric panel metric-chart">
+                <div class="metric-header-row">
+                  <span class="metric-icon purple"><svg class="metric-svg"><use href="#icon-cpu"/></svg></span>
+                  <span class="metric-live-tag">LIVE</span>
+                </div>
+                <small>USO CPU</small>
+                <strong id="metric-cpu">0%</strong>
+                <p id="metric-cpu-detail">Servidor / Sistema</p>
+                <div class="sparkline-box">
+                  <canvas id="cpu-sparkline" width="220" height="42"></canvas>
+                </div>
+              </article>
+              <article class="metric panel metric-chart">
+                <div class="metric-header-row">
+                  <span class="metric-icon amber"><svg class="metric-svg"><use href="#icon-ram"/></svg></span>
+                  <span class="metric-live-tag">LIVE</span>
+                </div>
+                <small>MEMORIA RAM</small>
+                <strong id="metric-ram">0 MB</strong>
+                <p id="metric-ram-detail">Servidor / Sistema</p>
+                <div class="sparkline-box">
+                  <canvas id="ram-sparkline" width="220" height="42"></canvas>
+                </div>
+              </article>
+              <article class="metric panel">
+                <div class="metric-header-row">
+                  <span class="metric-icon amber"><svg class="metric-svg"><use href="#icon-backups"/></svg></span>
+                </div>
+                <small>ÚLTIMO BACKUP</small>
+                <strong id="backup-age">—</strong>
+                <p id="backup-detail">Sin backups</p>
+              </article>
+              <article class="metric panel">
+                <div class="metric-header-row">
+                  <span class="metric-icon red"><svg class="metric-svg"><use href="#icon-sword"/></svg></span>
+                </div>
+                <small>PUERTO DE JUEGO</small>
+                <strong id="game-port">23409</strong>
+                <p id="beacon-port">Baliza 24520 / UDP</p>
+              </article>
             </div>
           </div>
           <div class="two-columns">
@@ -140,6 +254,20 @@
               <div class="form-grid">
                 <div>
                   <label>
+                    <span>Modo de juego</span>
+                    <select id="rules-mode-select" name="gameMode">
+                      <option value="1">Estándar (Supervivencia normal con reaparición)</option>
+                      <option value="2">Muerte definitiva / Hardcore (Una sola vida con corona)</option>
+                      <option value="3">Creativo (Sin amenazas, construcción ilimitada)</option>
+                    </select>
+                  </label>
+                  <p class="fineprint" style="margin-top: 0.65rem;">
+                    Define las reglas de mortalidad y ciclo de vida del personaje.
+                  </p>
+                </div>
+
+                <div>
+                  <label>
                     <span>Dificultad de la partida</span>
                     <select id="rules-difficulty-select" name="difficulty">
                       <option value="1">Normal (Equilibrado, estándar recomendado)</option>
@@ -154,7 +282,7 @@
                 </div>
 
                 <div>
-                  <label><span>Combate entre jugadores (JcJ)</span></label>
+                  <label><span>Combate entre jugadores (JcJ / Daño amigo)</span></label>
                   <label class="toggle-card">
                     <input type="checkbox" id="rules-pvp-toggle" name="pvpEnabledToggle" />
                     <span>
@@ -167,11 +295,26 @@
                     Activa el switch si deseas habilitar combates o daño entre aliados.
                   </p>
                 </div>
+
+                <div>
+                  <label><span>Crossplay de la partida</span></label>
+                  <label class="toggle-card">
+                    <input type="checkbox" id="rules-crossplay-toggle" name="crossplayToggle" />
+                    <span>
+                      <b id="rules-crossplay-title">Crossplay habilitado</b>
+                      <small id="rules-crossplay-desc">Permite que jugadores de PC y consolas se unan a la partida.</small>
+                    </span>
+                    <i></i>
+                  </label>
+                  <p class="fineprint" style="margin-top: 0.65rem;">
+                    Habilita o restringe la conexión cruzada de plataformas en el savegame.
+                  </p>
+                </div>
               </div>
 
               <div style="margin-top: 1.2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem; border-top: 1px solid var(--line); padding-top: 1rem;">
                 <p class="fineprint" style="margin: 0;">
-                  <b>Seguridad automática:</b> Al guardar se genera un backup de retorno y el servidor se reinicia con las nuevas reglas.
+                  <b>Seguridad automática:</b> Al guardar se genera un backup de retorno y se actualizan los archivos de partida y configuración.
                 </p>
                 <button type="submit" id="save-rules-btn" class="button primary">Guardar y aplicar reglas</button>
               </div>
@@ -201,6 +344,69 @@
           </div>
         </section>
 
+        <section id="page-players" class="page">
+          <div class="page-intro">
+            <div>
+              <h3>Gestión de jugadores y roles</h3>
+              <p>Controla los permisos de administrador en el juego, baneos y monitoreo en tiempo real.</p>
+            </div>
+            <button id="add-player-btn" class="button primary" type="button">+ Añadir jugador</button>
+          </div>
+
+          <div class="slots-roster-card panel dark-panel" style="margin-bottom: 1.5rem;">
+            <div class="slots-roster-head">
+              <div>
+                <p class="eyebrow">CAPACIDAD DE AVENTUREROS</p>
+                <div style="display: flex; align-items: center; gap: 0.8rem; margin-top: 0.2rem;">
+                  <h3 style="margin: 0; font-family: 'Cinzel', serif;">Slots del Servidor</h3>
+                  <span id="slots-badge-count" class="badge-mini online">0 / 6 Ocupados</span>
+                </div>
+              </div>
+              <div id="roster-slots-visual" class="roster-slots-row"></div>
+            </div>
+            <p class="fineprint" style="margin: 0.8rem 0 0;">Cada jugador conectado en el mundo consume ~1 GB de RAM adicional en la simulación física de Unreal Engine 5.</p>
+          </div>
+
+          <article class="panel" style="margin-bottom: 1.5rem;">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">EN LÍNEA AHORA</p>
+                <h3>Jugadores conectados (<span id="online-players-count">0</span> / 6)</h3>
+              </div>
+            </div>
+            <div id="online-players-list" class="item-list">
+              <p class="empty">No hay jugadores conectados en este momento.</p>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">DEDICATEDSERVER.INI</p>
+                <h3>Lista de jugadores registrados (KnownPlayerList)</h3>
+              </div>
+              <button id="refresh-players" class="button tiny ghost" type="button" title="Refrescar lista"><svg class="action-svg"><use href="#icon-refresh"/></svg></button>
+            </div>
+            <div class="table-responsive" style="overflow-x: auto; margin-top: 1rem;">
+              <table class="players-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                <thead>
+                  <tr style="border-bottom: 1px solid var(--line); color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;">
+                    <th style="width: 48px; padding: 0.75rem 0.5rem; text-align: center;">Avatar</th>
+                    <th style="padding: 0.75rem 0.5rem;">Usuario</th>
+                    <th style="padding: 0.75rem 0.5rem;">Player ID</th>
+                    <th style="padding: 0.75rem 0.5rem;">Rol en juego</th>
+                    <th style="padding: 0.75rem 0.5rem;">Estado</th>
+                    <th style="padding: 0.75rem 0.5rem; text-align: right;">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="known-players-tbody">
+                  <tr><td colspan="6" class="empty" style="padding: 1.5rem; text-align: center;">Cargando jugadores...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
         <section id="page-backups" class="page">
           <div class="page-intro"><div><h3>Backups recuperables</h3><p>Cada actualización y restauración crea un punto de retorno antes de modificar los datos.</p></div><button id="create-backup" class="button primary">Crear backup ahora</button></div>
           <article class="panel"><div id="backup-list" class="backup-list"><p class="empty">Todavía no hay backups.</p></div></article>
@@ -223,8 +429,26 @@
         </section>
 
         <section id="page-logs" class="page">
-          <div class="page-intro"><div><h3>Registros en vivo</h3><p>Los secretos conocidos se ocultan antes de aparecer aquí.</p></div><button id="clear-log-view" class="button ghost">Limpiar vista</button></div>
-          <article class="terminal"><div class="terminal-bar"><i></i><i></i><i></i><span>dragonwilds.log</span></div><pre id="log-output">Esperando eventos…</pre></article>
+          <div class="page-intro">
+            <div>
+              <h3>Registros en vivo</h3>
+              <p>Flujo en tiempo real con filtrado por categoría y descarga del archivo completo.</p>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <span id="sse-status-pill" class="status-badge online" style="font-size: 0.65rem;">SSE EN VIVO</span>
+              <a href="/api/logs/download" download="RSDragonwilds.log" class="button tiny ghost" id="download-log-btn">Descargar .log</a>
+              <button id="clear-log-view" class="button tiny ghost">Limpiar vista</button>
+            </div>
+          </div>
+          <div class="log-filter-bar" style="display: flex; gap: 0.4rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+            <button class="button tiny dark log-filter active" data-filter="all">Todos</button>
+            <button class="button tiny ghost log-filter" data-filter="server">Juego</button>
+            <button class="button tiny ghost log-filter" data-filter="panel">Panel</button>
+            <button class="button tiny ghost log-filter" data-filter="vpn">VPN</button>
+            <button class="button tiny ghost log-filter" data-filter="backup">Backup</button>
+            <button class="button tiny ghost log-filter" data-filter="world">Mundo</button>
+          </div>
+          <article class="terminal"><div class="terminal-bar"><i></i><i></i><i></i><span>dragonwilds.log (RSDragonwildsServer)</span></div><pre id="log-output">Esperando eventos…</pre></article>
         </section>
 
         <section id="page-settings" class="page">
@@ -237,14 +461,32 @@
                 <label><span>Nombre del mundo <b>*</b></span><input name="worldName" id="setting-world-name" list="world-datalist" required autocomplete="off" placeholder="Escribe o selecciona un mundo" /><datalist id="world-datalist"></datalist></label>
                 <label><span>Contraseña del mundo</span><input name="worldPassword" type="password" placeholder="Vacío conserva la actual" /></label>
                 <label><span>Contraseña admin del juego <b>*</b></span><input name="adminPassword" type="password" placeholder="Vacío conserva la actual" /></label>
+                <label class="wide">
+                  <span>Política de Plataformas (Crossplay del Servidor)</span>
+                  <select name="platformPolicy">
+                    <option value="Crossplay">Crossplay (PC, PlayStation, Xbox, Nintendo Switch)</option>
+                    <option value="PC">Sólo PC (Steam / Epic Games)</option>
+                    <option value="PlayStation">Sólo PlayStation</option>
+                    <option value="Xbox">Sólo Xbox</option>
+                    <option value="Nintendo">Sólo Nintendo</option>
+                  </select>
+                </label>
                 <label class="wide"><span>Administradores</span><input name="administrators" placeholder="IDs separados por comas" /></label>
               </div>
             </article>
-            <article class="panel form-section"><div class="form-title"><span>02</span><div><h3>Operación</h3><p>Actualizaciones y protección del mundo.</p></div></div>
-              <div class="choice-row">
-                <label class="toggle-card"><input name="autoStart" type="checkbox" /><span><b>Arranque automático</b><small>Inicia el mundo con la app.</small></span><i></i></label>
+            <article class="panel form-section"><div class="form-title"><span>02</span><div><h3>Operación y Backups</h3><p>Actualizaciones y programación de copias de seguridad.</p></div></div>
+              <div class="choice-row" style="grid-template-columns: 1.2fr 1fr 1fr; align-items: end;">
                 <label class="toggle-card"><input name="autoUpdate" type="checkbox" /><span><b>Actualizaciones automáticas</b><small>Reinicia cuando Steam detecta una versión.</small></span><i></i></label>
                 <label><span>Backups a conservar</span><input name="backupRetention" type="number" min="1" max="50" /></label>
+                <label>
+                  <span>Auto-backup periódico</span>
+                  <select name="backupSchedule">
+                    <option value="disabled">Desactivado (manual)</option>
+                    <option value="6h">Cada 6 horas</option>
+                    <option value="12h">Cada 12 horas</option>
+                    <option value="24h">Cada 24 horas (diario)</option>
+                  </select>
+                </label>
               </div>
             </article>
             <article class="panel form-section"><div class="form-title"><span>03</span><div><h3>Conectividad</h3><p>Directa o mediante tu VPS WireGuard.</p></div></div>
@@ -259,11 +501,57 @@
                 <label class="wide"><span>Preshared key (opcional)</span><input name="vpn.presharedKey" type="password" placeholder="Vacío conserva la actual" /></label>
               </div>
             </article>
-            <div class="save-bar"><p>Los cambios de <b>DedicatedServer.ini</b> sólo son seguros con el juego detenido.</p><button class="button primary" type="submit">Guardar y aplicar</button></div>
+            <article class="panel form-section"><div class="form-title"><span>04</span><div><h3>Rendimiento UE5</h3><p>Optimización del motor Unreal Engine 5 y frecuencia de actualización de red (Tick Rate).</p></div></div>
+              <div class="form-grid">
+                <label class="wide">
+                  <span>Frecuencia del servidor (Tick Rate)</span>
+                  <select name="performance.tickRate">
+                    <option value="30">30 Hz (Ahorro de energía y bajo consumo de CPU)</option>
+                    <option value="60">60 Hz (Recomendado estándar: simulación fluida y precisa)</option>
+                    <option value="120">120 Hz (Alto rendimiento: máxima respuesta competitiva)</option>
+                  </select>
+                </label>
+              </div>
+              <p class="fineprint" style="margin-top: 0.75rem;">Configura <code>NetServerMaxTickRate</code>, <code>LanServerMaxTickRate</code> y <code>NetClientTicksPerSecond</code> en <code>Engine.ini</code>.</p>
+            </article>
+            <div class="save-bar"><p>Los cambios de <b>DedicatedServer.ini</b> y <b>Engine.ini</b> son aplicados de forma segura.</p><button class="button primary" type="submit">Guardar y aplicar</button></div>
           </form>
         </section>
       </main>
     </div>
+
+    <dialog id="player-dialog">
+      <form id="player-modal-form" method="dialog" style="text-align: left; padding: 1.5rem;">
+        <h3 id="player-dialog-title" style="margin-top: 0; font-family: Georgia, serif;">Añadir jugador</h3>
+        <p class="muted small" style="margin-bottom: 1.2rem;">Registra un nuevo jugador en <code>DedicatedServer.ini</code> para asignarle rol y permisos.</p>
+        <div style="display: grid; gap: 1rem;">
+          <label>
+            <span>Player ID (32 caracteres hexadecimales) <b>*</b></span>
+            <input id="player-form-id" required placeholder="00025be9182947128e2c6f899f51e1ba" />
+          </label>
+          <label>
+            <span>Nombre de usuario <b>*</b></span>
+            <input id="player-form-name" required placeholder="ChamapTV" />
+          </label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.5rem;">
+            <label class="toggle-card">
+              <input type="checkbox" id="player-form-admin" />
+              <span><b>Administrador</b><small>PrivilegeMask=14</small></span>
+              <i></i>
+            </label>
+            <label class="toggle-card">
+              <input type="checkbox" id="player-form-banned" />
+              <span><b>Baneado</b><small>Bloquea la entrada</small></span>
+              <i></i>
+            </label>
+          </div>
+        </div>
+        <div class="dialog-actions" style="margin-top: 1.5rem;">
+          <button type="button" id="player-modal-cancel" class="button ghost">Cancelar</button>
+          <button type="submit" id="player-modal-submit" class="button primary">Guardar jugador</button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog id="confirm-dialog">
       <form method="dialog">

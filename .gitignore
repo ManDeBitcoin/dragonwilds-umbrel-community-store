@@ -1,4 +1,6 @@
 dev-data/
-*.tar.gz
 *.partial
 .DS_Store
+*.tar.gz
+!/dragonwilds-server/data/backups/*.tar.gz
+!/app/seed-data/backups/*.tar.gz

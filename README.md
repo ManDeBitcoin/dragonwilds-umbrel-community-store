@@ -67,17 +67,26 @@ red. No se monta `/var/run/docker.sock`.
 5. Haz commit del `docker-compose.yml` actualizado.
 6. Añade la URL del repositorio en **Umbrel → App Store → Community App Stores**.
 
+## Estado del Servidor Migrado
+
+Este repositorio incluye la adaptación directa y pre-configurada del servidor funcional independiente:
+- **Mundo activo**: `Chavito.sav` con sus 33 celdas de modificaciones de terreno en `SpudCache`.
+- **Servidor**: `ChamapTV` con `OwnerId` configurado y lista de 6 administradores `KnownPlayerList` preservada.
+- **Túnel WireGuard**: Pre-configurado hacia VPS `152.53.54.0:51820` (IP cliente `10.8.0.2/24`, puerto `51831`, enrutamiento de políticas tabla `23409`).
+- **Historial de Backups**: 4 copias de seguridad históricas disponibles desde el panel para restauración inmediata.
+- **Lanzador protegido**: `entrypoint-game.sh` previene que la plantilla básica de Jagex sobreescriba o elimine `DedicatedServer.ini`.
+- **Auto-seeding**: Al instalar en Umbrel, los datos se auto-cargan automáticamente si los volúmenes están vacíos.
+
 ## Primer arranque
 
 1. Instala la app y abre el panel.
 2. Usa el usuario `admin` y la contraseña que muestra Umbrel para la app.
-3. Introduce el Player ID de Dragonwilds, nombre del servidor, mundo y contraseña
-   de administración.
-4. Elige conexión directa o VPS + WireGuard.
-5. En modo WireGuard, pega un peer exclusivo para este Umbrel. No reutilices la
-   misma clave en teléfonos u otros equipos.
-6. Copia las reglas que muestra **Red y VPN** al contenedor wg-easy del VPS.
-7. Arranca. El primer inicio descarga aproximadamente 20 GB y puede tardar.
+3. El servidor ya viene configurado con el mundo `Chavito`, servidor `ChamapTV` y túnel WireGuard activo.
+4. Si deseas cambiar reglas de juego o dificultad, ve a la pestaña **Mundo** o edita los ajustes en **Ajustes**.
+5. Para migrar datos adicionales o desde otra carpeta en el host Umbrel, puedes usar:
+   ```bash
+   ./scripts/migrate-from-homelab.sh <ruta-origen>
+   ```
 
 ## JcJ y dificultad
 

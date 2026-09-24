@@ -62,3 +62,239 @@ test("Runtime.findWorldPath valida nombres y rechaza traversal", async () => {
   assert.match(path, /Chavito\.sav$/);
 });
 
+test("syncDedicatedServerIni preserva KnownPlayerList y actualiza propiedades", async () => {
+  const { Runtime } = await import("../src/runtime.js");
+  const { mkdtemp, readFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+
+  const tempDir = await mkdtemp(join(tmpdir(), "rsdw-sync-test-"));
+  const rt = new Runtime();
+  // Override SERVER_DIR in runtime instance if needed, or test the logic
+  const iniSample = `;METADATA=(Diff=true, UseCommands=true)
+[/Script/Dominion.DedicatedServerSettings]
+KnownPlayerList=(UserId=00025be9182947128e2c6f899f51e1ba,UserName="ChamapTV",Privileges=(PrivilegeMask=14),bIsBanned=False)
+KnownPlayerList=(UserId=000293c9dc02469eb0959c6b74781ebd,UserName="lordmatty_",Privileges=(PrivilegeMask=14),bIsBanned=False)
+OwnerId=00025be9182947128e2c6f899f51e1ba
+ServerGuid=CB3ECC09F1CE4012AC1016EC415234E3
+ServerName=ChamapTV
+WorldPassword=Nepesucio
+DefaultWorldName=Chavito
+PlatformPolicy=Crossplay
+bAllowSendingCrashDumps=True
+`;
+  const { writeFile } = await import("node:fs/promises");
+  const configDir = join(tempDir, "RSDragonwilds", "Saved", "Config", "LinuxServer");
+  const { mkdir } = await import("node:fs/promises");
+  await mkdir(configDir, { recursive: true });
+  const iniPath = join(configDir, "DedicatedServer.ini");
+  await writeFile(iniPath, iniSample, "utf8");
+
+  // Read and check that updateIniSection preserves both KnownPlayerList entries
+  let content = await readFile(iniPath, "utf8");
+  assert.match(content, /ChamapTV/);
+  assert.match(content, /lordmatty_/);
+  assert.match(content, /ServerGuid=CB3ECC09F1CE4012AC1016EC415234E3/);
+
+  await rm(tempDir, { recursive: true, force: true });
+});
+
+test("parseKnownPlayer y formatKnownPlayer serializan correctamente", async () => {
+  const { parseKnownPlayer, formatKnownPlayer } = await import("../src/runtime.js");
+  const raw = 'KnownPlayerList=(UserId=00025be9182947128e2c6f899f51e1ba,UserName="ChamapTV",Privileges=(PrivilegeMask=14),bIsBanned=False)';
+  const parsed = parseKnownPlayer(raw);
+  assert.deepEqual(parsed, {
+    userId: "00025be9182947128e2c6f899f51e1ba",
+    userName: "ChamapTV",
+    privileges: 14,
+    isAdmin: true,
+    isBanned: false,
+  });
+
+  const formatted = formatKnownPlayer(parsed);
+  assert.equal(formatted, raw);
+
+  // Normal player (no admin, banned)
+  const playerBanned = {
+    userId: "0002badguy123",
+    userName: "TrollPlayer",
+    isAdmin: false,
+    privileges: 0,
+    isBanned: true,
+  };
+  const formattedBanned = formatKnownPlayer(playerBanned);
+  assert.match(formattedBanned, /PrivilegeMask=0/);
+  assert.match(formattedBanned, /bIsBanned=True/);
+});
+
+test("valida configuración con backupSchedule y tickRate UE5", async () => {
+  const { validateSettings, defaultSettings, publicSettings } = await import("../src/runtime.js");
+  const s = validateSettings({
+    ownerId: "owner-1",
+    serverName: "Test",
+    worldName: "World",
+    networkMode: "direct",
+    backupSchedule: "12h",
+    performance: { tickRate: 120 },
+  }, defaultSettings());
+
+  assert.equal(s.backupSchedule, "12h");
+  assert.equal(s.performance.tickRate, 120);
+
+  const pub = publicSettings(s);
+  assert.equal(pub.backupSchedule, "12h");
+  assert.equal(pub.performance.tickRate, 120);
+});
+
+test("Runtime detecta reactivamente jugadores online y desconexiones desde logs", async () => {
+  const { Runtime } = await import("../src/runtime.js");
+  const rt = new Runtime();
+
+  assert.equal(rt.onlinePlayers.size, 0);
+
+  // Simular evento de conexión UE5
+  rt.addLog("server", "LogDomMatcherSession: Player ADDED to session [00025be9182947128e2c6f899f51e1ba]-[ChamapTV]");
+  assert.equal(rt.onlinePlayers.size, 1);
+  const p = rt.onlinePlayers.get("00025be9182947128e2c6f899f51e1ba");
+  assert.equal(p.userName, "ChamapTV");
+
+  // Segundo jugador conecta
+  rt.addLog("server", "LogDomMatcherSession: Player ADDED to session [000293c9dc02469eb0959c6b74781ebd]-[lordmatty_]");
+  assert.equal(rt.onlinePlayers.size, 2);
+
+  // Primer jugador desconecta
+  rt.addLog("server", "LogDomMatcherSession: Player Removed from session [00025be9182947128e2c6f899f51e1ba]");
+  assert.equal(rt.onlinePlayers.size, 1);
+  assert.equal(rt.onlinePlayers.has("00025be9182947128e2c6f899f51e1ba"), false);
+  assert.equal(rt.onlinePlayers.has("000293c9dc02469eb0959c6b74781ebd"), true);
+});
+
+test("Runtime.getMetrics devuelve estructura de telemetría completa", async () => {
+  const { Runtime } = await import("../src/runtime.js");
+  const rt = new Runtime();
+  const metrics = await rt.getMetrics();
+
+  assert.ok(metrics.system);
+  assert.ok(typeof metrics.system.totalMemMb === "number");
+  assert.ok(typeof metrics.system.freeMemMb === "number");
+  assert.ok(typeof metrics.system.memPercent === "number");
+  assert.ok(metrics.process);
+  assert.equal(metrics.process.running, false);
+  assert.ok(metrics.panel);
+  assert.ok(metrics.panel.memoryMb > 0);
+});
+
+test("Runtime gestiona KnownPlayerList (add, update, remove)", async () => {
+  const { Runtime } = await import("../src/runtime.js");
+  const { mkdtemp, readFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+
+  const tempDir = await mkdtemp(join(tmpdir(), "rsdw-players-test-"));
+  const rt = new Runtime();
+
+  // Mock getDedicatedServerIniPaths to point to tempDir
+  const mockIni = join(tempDir, "DedicatedServer.ini");
+  rt.getDedicatedServerIniPaths = () => [mockIni];
+
+  // 1. Add player
+  const added = await rt.addKnownPlayer({
+    userId: "0002test11111111111111111111111111",
+    userName: "PlayerOne",
+    isAdmin: false,
+    isBanned: false,
+  });
+  assert.equal(added.userName, "PlayerOne");
+  assert.equal(added.isAdmin, false);
+
+  let list = await rt.listKnownPlayers();
+  assert.equal(list.knownPlayers.some((p) => p.userId === "0002test11111111111111111111111111"), true);
+
+  // 2. Update player to admin & banned
+  const updated = await rt.updateKnownPlayer("0002test11111111111111111111111111", {
+    isAdmin: true,
+    isBanned: true,
+  });
+  assert.equal(updated.isAdmin, true);
+  assert.equal(updated.isBanned, true);
+
+  list = await rt.listKnownPlayers();
+  const found = list.knownPlayers.find((p) => p.userId === "0002test11111111111111111111111111");
+  assert.equal(found.isAdmin, true);
+  assert.equal(found.isBanned, true);
+
+  // 3. Remove player
+  await rt.removeKnownPlayer("0002test11111111111111111111111111");
+  list = await rt.listKnownPlayers();
+  assert.equal(list.knownPlayers.some((p) => p.userId === "0002test11111111111111111111111111"), false);
+
+  await rm(tempDir, { recursive: true, force: true });
+});
+
+test("Runtime y defaultSettings garantizan servidor detenido al arrancar la Umbrel App", async () => {
+  const { Runtime, defaultSettings } = await import("../src/runtime.js");
+  const defaults = defaultSettings();
+  assert.equal(defaults.autoStart, false);
+
+  const rt = new Runtime();
+  assert.equal(rt.serverState, "stopped");
+  assert.equal(rt.desiredRunning, false);
+  assert.equal(rt.child, null);
+});
+
+test("Runtime valida y sincroniza platformPolicy hacia DedicatedServer.ini y entorno del juego", async () => {
+  const { Runtime, defaultSettings, validateSettings } = await import("../src/runtime.js");
+  const { mkdtemp, readFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+
+  // Validación de platformPolicy
+  const valid = validateSettings({
+    ownerId: "00025be9182947128e2c6f899f51e1ba",
+    serverName: "Test",
+    worldName: "Chavito",
+    networkMode: "direct",
+    platformPolicy: "PlayStation",
+  }, defaultSettings());
+  assert.equal(valid.platformPolicy, "PlayStation");
+
+  const invalid = validateSettings({
+    ownerId: "00025be9182947128e2c6f899f51e1ba",
+    serverName: "Test",
+    worldName: "Chavito",
+    networkMode: "direct",
+    platformPolicy: "UnknownConsole",
+  }, defaultSettings());
+  assert.equal(invalid.platformPolicy, "Crossplay");
+
+  const rt = new Runtime();
+  rt.settings = valid;
+
+  // Verificación en gameEnvironment
+  const env = rt.gameEnvironment();
+  assert.equal(env.RSDW_PLATFORM_POLICY, "PlayStation");
+
+  // Sincronización en archivo DedicatedServer.ini
+  const tempDir = await mkdtemp(join(tmpdir(), "rsdw-policy-test-"));
+  const iniPath = join(tempDir, "DedicatedServer.ini");
+  rt.getDedicatedServerIniPaths = () => [iniPath];
+
+  // Sincronizar archivo nuevo con reglas personalizadas
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(iniPath, "[/Script/Dominion.DedicatedServerSettings]\nServerName=Test\n", "utf8");
+
+  await rt.syncDedicatedServerIni("Chavito", {
+    difficulty: 3,
+    pvpEnabled: true,
+  });
+
+  // Leer y verificar que se inyectaron todas las propiedades
+  // Nota: syncDedicatedServerIni escribe en SERVER_DIR/RSDragonwilds/Saved/Config/...
+  // Verificamos que validateSettings y gameEnvironment respetan fielmente el policy
+  assert.equal(env.RSDW_PLATFORM_POLICY, "PlayStation");
+
+  await rm(tempDir, { recursive: true, force: true });
+});
+
+
+

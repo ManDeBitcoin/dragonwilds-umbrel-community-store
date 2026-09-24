@@ -3,6 +3,12 @@ import { readFile, writeFile } from "node:fs/promises";
 /**
  * Constantes y mapeos de reglas de juego de Dragonwilds (sin emojis).
  */
+export const GAME_MODE_LABELS = {
+  1: "Estándar (Supervivencia)",
+  2: "Hardcore (Muerte definitiva)",
+  3: "Creativo (Construcción libre)",
+};
+
 export const DIFFICULTY_LABELS = {
   0: "Personalizado",
   1: "Normal",
@@ -13,6 +19,13 @@ export const DIFFICULTY_LABELS = {
 export const PVP_LABELS = {
   0: "Desactivado (Cooperativo)",
   1: "Activado (JcJ / Fuego amigo)",
+};
+
+export const CROSSPLAY_LABELS = {
+  Crossplay: "Crossplay (PC, PlayStation, Xbox, Switch)",
+  PC: "Solo PC (Steam)",
+  PlayStation: "Solo PlayStation 5",
+  Xbox: "Solo Xbox Series X|S",
 };
 
 /**
@@ -204,12 +217,21 @@ export function inspectDragonwildsBinary(buffer) {
 
     let cinfDiffOffset = null;
     let cinfPvpOffset = null;
+    let cinfHardcoreOffset = null;
+    let cinfCrossplayOffset = null;
+    let cinfPrivacyOffset = null;
 
     for (let i = 0; i < names.length; i++) {
       if (names[i] === "FriendlyFire") {
         cinfPvpOffset = payloadStart + offsets[i];
       } else if (names[i] === "SurvivalDifficulty") {
         cinfDiffOffset = payloadStart + offsets[i];
+      } else if (names[i] === "HardcoreState") {
+        cinfHardcoreOffset = payloadStart + offsets[i];
+      } else if (names[i] === "CrossplayEnabled") {
+        cinfCrossplayOffset = payloadStart + offsets[i];
+      } else if (names[i] === "SessionPrivacy") {
+        cinfPrivacyOffset = payloadStart + offsets[i];
       }
     }
 
@@ -239,17 +261,39 @@ export function inspectDragonwildsBinary(buffer) {
     const pvp = cinfPvpOffset !== null
       ? buffer[cinfPvpOffset] === 1
       : buffer[propPvpOffset] === 1;
+    const hardcore = cinfHardcoreOffset !== null
+      ? buffer.readInt32LE(cinfHardcoreOffset)
+      : 1;
+    const crossplay = cinfCrossplayOffset !== null
+      ? buffer.readInt32LE(cinfCrossplayOffset) === 1
+      : true;
+
+    let gameMode = 1;
+    if (hardcore === 2) {
+      gameMode = 2; // Hardcore
+    } else if (diff === 2) {
+      gameMode = 3; // Creativo
+    } else {
+      gameMode = 1; // Estándar
+    }
 
     return {
       detected: true,
       format: "dragonwilds",
+      gameMode,
+      gameModeLabel: GAME_MODE_LABELS[gameMode] || "Estándar",
       difficulty: (diff >= 0 && diff <= 3) ? diff : 1,
       difficultyLabel: DIFFICULTY_LABELS[diff] || "Normal",
       pvpEnabled: Boolean(pvp),
       pvpLabel: pvp ? PVP_LABELS[1] : PVP_LABELS[0],
+      crossplayEnabled: Boolean(crossplay),
+      crossplayLabel: CROSSPLAY_LABELS[crossplay ? 1 : 0] || (crossplay ? "Habilitado" : "Deshabilitado"),
       offsets: {
         cinfDiffOffset,
         cinfPvpOffset,
+        cinfHardcoreOffset,
+        cinfCrossplayOffset,
+        cinfPrivacyOffset,
         propDiffOffset,
         propPvpOffset,
       },
@@ -260,7 +304,7 @@ export function inspectDragonwildsBinary(buffer) {
 }
 
 /**
- * Lee las reglas de juego (dificultad y PvP) de un buffer .sav de Dragonwilds.
+ * Lee las reglas de juego (dificultad, modo, PvP, crossplay) de un buffer .sav de Dragonwilds.
  */
 export function inspectWorldSave(buffer) {
   // 1. Detección nativa del formato específico de Dragonwilds (SAVE / CINF / PROP)
@@ -280,10 +324,14 @@ export function inspectWorldSave(buffer) {
   return {
     detected,
     format: "gvas",
+    gameMode: difficulty === 2 ? 3 : 1,
+    gameModeLabel: difficulty === 2 ? GAME_MODE_LABELS[3] : GAME_MODE_LABELS[1],
     difficulty,
     difficultyLabel: DIFFICULTY_LABELS[difficulty] || "Normal",
     pvpEnabled,
     pvpLabel: pvpEnabled ? PVP_LABELS[1] : PVP_LABELS[0],
+    crossplayEnabled: true,
+    crossplayLabel: CROSSPLAY_LABELS[1],
     offsets: {
       difficulty: diffResult.found ? diffResult.valOffset : null,
       pvp: pvpResult.found ? pvpResult.valOffset : null,
@@ -296,13 +344,25 @@ export function inspectWorldSave(buffer) {
 /**
  * Modifica las reglas en un buffer binario .sav y devuelve el buffer actualizado.
  */
-export function patchWorldSave(buffer, { difficulty, pvpEnabled }) {
+export function patchWorldSave(buffer, { difficulty, pvpEnabled, gameMode, crossplayEnabled }) {
   const inspected = inspectWorldSave(buffer);
   const copy = Buffer.from(buffer);
 
   let modified = false;
 
   if (inspected.format === "dragonwilds") {
+    if (typeof gameMode === "number") {
+      if (inspected.offsets.cinfHardcoreOffset !== null) {
+        const hcVal = gameMode === 2 ? 2 : 1;
+        copy.writeInt32LE(hcVal, inspected.offsets.cinfHardcoreOffset);
+        modified = true;
+      }
+      if (gameMode === 3 && inspected.offsets.cinfDiffOffset !== null) {
+        copy.writeInt32LE(2, inspected.offsets.cinfDiffOffset); // 2 = Creativo
+        modified = true;
+      }
+    }
+
     if (typeof difficulty === "number" && difficulty >= 0 && difficulty <= 3) {
       if (inspected.offsets.cinfDiffOffset !== null) {
         copy.writeInt32LE(difficulty, inspected.offsets.cinfDiffOffset);
@@ -313,6 +373,7 @@ export function patchWorldSave(buffer, { difficulty, pvpEnabled }) {
         modified = true;
       }
     }
+
     if (typeof pvpEnabled === "boolean" || typeof pvpEnabled === "number") {
       const val = pvpEnabled ? 1 : 0;
       if (inspected.offsets.cinfPvpOffset !== null) {
@@ -325,12 +386,31 @@ export function patchWorldSave(buffer, { difficulty, pvpEnabled }) {
       }
     }
 
+    if (typeof crossplayEnabled === "boolean" || typeof crossplayEnabled === "number") {
+      const val = crossplayEnabled ? 1 : 0;
+      if (inspected.offsets.cinfCrossplayOffset !== null) {
+        copy.writeInt32LE(val, inspected.offsets.cinfCrossplayOffset);
+        modified = true;
+      }
+    }
+
+    const finalGameMode = typeof gameMode === "number" ? gameMode : inspected.gameMode;
+    const finalDiff = typeof difficulty === "number" ? difficulty : inspected.difficulty;
+    const finalPvp = typeof pvpEnabled === "boolean" ? pvpEnabled : inspected.pvpEnabled;
+    const finalCross = typeof crossplayEnabled === "boolean" || typeof crossplayEnabled === "number" ? Boolean(crossplayEnabled) : inspected.crossplayEnabled;
+
     return {
       buffer: copy,
       modified,
       rules: {
-        difficulty: typeof difficulty === "number" ? difficulty : inspected.difficulty,
-        pvpEnabled: typeof pvpEnabled === "boolean" ? pvpEnabled : inspected.pvpEnabled,
+        gameMode: finalGameMode,
+        gameModeLabel: GAME_MODE_LABELS[finalGameMode] || "Estándar",
+        difficulty: finalDiff,
+        difficultyLabel: DIFFICULTY_LABELS[finalDiff] || "Normal",
+        pvpEnabled: finalPvp,
+        pvpLabel: finalPvp ? PVP_LABELS[1] : PVP_LABELS[0],
+        crossplayEnabled: finalCross,
+        crossplayLabel: CROSSPLAY_LABELS[finalCross ? 1 : 0] || (finalCross ? "Habilitado" : "Deshabilitado"),
       },
     };
   }
@@ -359,12 +439,20 @@ export function patchWorldSave(buffer, { difficulty, pvpEnabled }) {
     }
   }
 
+  const gvasFinalCross = typeof crossplayEnabled === "boolean" || typeof crossplayEnabled === "number" ? Boolean(crossplayEnabled) : (inspected.crossplayEnabled ?? true);
+
   return {
     buffer: copy,
     modified,
     rules: {
+      gameMode: typeof gameMode === "number" ? gameMode : (inspected.gameMode || 1),
+      gameModeLabel: GAME_MODE_LABELS[typeof gameMode === "number" ? gameMode : (inspected.gameMode || 1)] || "Estándar",
       difficulty: typeof difficulty === "number" ? difficulty : inspected.difficulty,
+      difficultyLabel: DIFFICULTY_LABELS[typeof difficulty === "number" ? difficulty : inspected.difficulty] || "Normal",
       pvpEnabled: typeof pvpEnabled === "boolean" ? pvpEnabled : inspected.pvpEnabled,
+      pvpLabel: (typeof pvpEnabled === "boolean" ? pvpEnabled : inspected.pvpEnabled) ? PVP_LABELS[1] : PVP_LABELS[0],
+      crossplayEnabled: gvasFinalCross,
+      crossplayLabel: CROSSPLAY_LABELS[gvasFinalCross ? 1 : 0] || (gvasFinalCross ? "Habilitado" : "Deshabilitado"),
     },
   };
 }
@@ -379,10 +467,14 @@ export async function readWorldRulesFromFile(filePath) {
   } catch (error) {
     return {
       detected: false,
+      gameMode: 1,
+      gameModeLabel: GAME_MODE_LABELS[1],
       difficulty: 1,
       difficultyLabel: DIFFICULTY_LABELS[1],
       pvpEnabled: false,
       pvpLabel: PVP_LABELS[0],
+      crossplayEnabled: true,
+      crossplayLabel: CROSSPLAY_LABELS[1],
       error: error.message,
     };
   }

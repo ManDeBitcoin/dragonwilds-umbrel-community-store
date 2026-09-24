@@ -17,13 +17,17 @@ import {
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { EventEmitter } from "node:events";
+import os from "node:os";
 import { pipeline } from "node:stream/promises";
-import { isIP } from "node:net";
+import { isIP, Socket } from "node:net";
 import {
   readWorldRulesFromFile,
   updateWorldRulesInFile,
+  GAME_MODE_LABELS,
   DIFFICULTY_LABELS,
   PVP_LABELS,
+  CROSSPLAY_LABELS,
 } from "./world-editor.js";
 
 const GAME_UID = Number(process.env.GAME_UID || 1000);
@@ -36,7 +40,7 @@ const BACKUP_DIR = resolve(process.env.BACKUP_DIR || "/data/backups");
 const WG_DIR = resolve(process.env.WG_DIR || "/etc/wireguard");
 const WORLD_DIR = join(SERVER_DIR, "RSDragonwilds", "Saved", "SaveGames");
 const SETTINGS_FILE = join(DATA_DIR, "settings.json");
-const GAME_ENTRY = process.env.GAME_ENTRY || "/entry.sh";
+const GAME_ENTRY = process.env.GAME_ENTRY || "/opt/dragonwilds/entrypoint-game.sh";
 
 export async function resolveWorldDir() {
   const primary = join(SERVER_DIR, "RSDragonwilds", "Saved", "SaveGames");
@@ -58,23 +62,28 @@ export const constants = {
 
 export const defaultSettings = () => ({
   configured: false,
-  ownerId: "",
-  serverName: "Dragonwilds en Umbrel",
-  worldName: "Ashenfall",
+  ownerId: "00025be9182947128e2c6f899f51e1ba",
+  serverName: "ChamapTV",
+  worldName: "Chavito",
   worldPassword: "",
   adminPassword: "",
-  administrators: "",
-  autoStart: true,
+  administrators: "000293c9dc02469eb0959c6b74781ebd,000299e8be034a28a0e01be52fc967c8,0002d8eb1f3b4bf3bd3210b9dea9c490,0002d71d75c244468d4a7438ac03da03,0002bd4e6d3043d2b4c24f9b074a5d92",
+  platformPolicy: "Crossplay",
+  autoStart: false,
   autoUpdate: true,
   backupRetention: 10,
+  backupSchedule: "disabled",
   networkMode: "wireguard",
+  performance: {
+    tickRate: 60,
+  },
   vpn: {
     address: "10.8.0.2/24",
     listenPort: 51831,
     privateKey: "",
     peerPublicKey: "",
     presharedKey: "",
-    endpoint: "",
+    endpoint: "152.53.54.0:51820",
     allowedIPs: "0.0.0.0/0",
     keepalive: 10,
     routeTable: 23409,
@@ -87,6 +96,29 @@ const VPN_SECRET_KEYS = new Set(["privateKey", "presharedKey"]);
 
 function cleanText(value, max = 128) {
   return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
+}
+
+export function parseKnownPlayer(line) {
+  const match = String(line || "").match(/KnownPlayerList=\(UserId=([^,]+),UserName="([^"]*)",Privileges=\(PrivilegeMask=(\d+)\),bIsBanned=(True|False)\)/i);
+  if (!match) return null;
+  const [, userId, userName, privilegeMask, bannedStr] = match;
+  const privileges = Number(privilegeMask);
+  const isBanned = bannedStr.toLowerCase() === "true";
+  return {
+    userId,
+    userName,
+    privileges,
+    isAdmin: privileges === 14,
+    isBanned,
+  };
+}
+
+export function formatKnownPlayer(player) {
+  const userId = cleanText(player.userId, 64);
+  const userName = cleanText(player.userName, 64);
+  const mask = player.isAdmin ? 14 : (Number(player.privileges) || 0);
+  const banned = player.isBanned ? "True" : "False";
+  return `KnownPlayerList=(UserId=${userId},UserName="${userName}",Privileges=(PrivilegeMask=${mask}),bIsBanned=${banned})`;
 }
 
 function validateIpCidr(value) {
@@ -165,6 +197,14 @@ export function validateSettings(input, current = defaultSettings()) {
   next.autoUpdate = Boolean(input.autoUpdate);
   next.networkMode = input.networkMode === "direct" ? "direct" : "wireguard";
   next.backupRetention = Math.min(50, Math.max(1, Number(input.backupRetention) || 10));
+  next.backupSchedule = ["disabled", "6h", "12h", "24h"].includes(input.backupSchedule) ? input.backupSchedule : (current.backupSchedule || "disabled");
+  const tickCandidate = Number(input.performance?.tickRate ?? current.performance?.tickRate);
+  next.performance = {
+    tickRate: [30, 60, 120].includes(tickCandidate) ? tickCandidate : 60,
+  };
+
+  const allowedPolicies = ["Crossplay", "PC", "PlayStation", "Xbox", "Nintendo"];
+  next.platformPolicy = allowedPolicies.includes(input.platformPolicy) ? input.platformPolicy : (current.platformPolicy || "Crossplay");
 
   for (const key of SECRET_KEYS) {
     if (Object.hasOwn(input, key) && input[key] !== "") next[key] = cleanText(input[key], 256);
@@ -174,7 +214,6 @@ export function validateSettings(input, current = defaultSettings()) {
   if (!next.ownerId) throw new Error("El Player ID del propietario es obligatorio.");
   if (!next.serverName) throw new Error("El nombre del servidor es obligatorio.");
   if (!next.worldName) throw new Error("El nombre del mundo es obligatorio.");
-  if (!next.adminPassword) throw new Error("La contraseña de administración del juego es obligatoria.");
 
   const vpnInput = input.vpn || {};
   const vpn = next.vpn;
@@ -217,6 +256,9 @@ export function publicSettings(settings) {
     adminPassword: "",
     hasWorldPassword: Boolean(settings.worldPassword),
     hasAdminPassword: Boolean(settings.adminPassword),
+    platformPolicy: settings.platformPolicy || "Crossplay",
+    performance: settings.performance || { tickRate: 60 },
+    backupSchedule: settings.backupSchedule || "disabled",
     vpn: {
       ...settings.vpn,
       privateKey: "",
@@ -272,8 +314,9 @@ async function exists(path) {
   }
 }
 
-export class Runtime {
+export class Runtime extends EventEmitter {
   constructor() {
+    super();
     this.settings = defaultSettings();
     this.child = null;
     this.desiredRunning = false;
@@ -281,7 +324,10 @@ export class Runtime {
     this.serverMessage = "Sin configurar";
     this.startedAt = null;
     this.logs = [];
+    this.onlinePlayers = new Map();
     this.operation = Promise.resolve();
+    this.backupScheduleTimer = null;
+    this.vpnWatchdogTimer = null;
   }
 
   async init() {
@@ -310,10 +356,25 @@ export class Runtime {
       } catch (error) {
         this.addLog("panel", `No se pudo leer settings.json: ${error.message}`);
       }
+    } else {
+      try {
+        this.settings = defaultSettings();
+        await atomicWrite(SETTINGS_FILE, `${JSON.stringify(this.settings, null, 2)}\n`);
+      } catch {}
     }
-    if (this.settings.configured && this.settings.autoStart) {
-      setTimeout(() => this.enqueue(() => this.start()).catch(() => {}), 800);
+    if (this.settings.networkMode === "wireguard" && this.settings.vpn?.privateKey) {
+      try {
+        await this.writeWireGuardConfig();
+      } catch {}
     }
+    await this.syncEngineIni().catch(() => {});
+    this.setupBackupSchedule();
+    this.setupVpnWatchdog();
+    this.desiredRunning = false;
+    this.serverState = "stopped";
+    this.serverMessage = this.settings.configured
+      ? "Servidor detenido (listo para arrancar)"
+      : "Sin configurar";
   }
 
   addLog(source, line) {
@@ -325,8 +386,36 @@ export class Runtime {
     ].filter(Boolean);
     let safe = String(line).replace(/[\r\n]+$/, "");
     for (const secret of secretValues) safe = safe.split(secret).join("[SECRETO]");
-    this.logs.push({ at: new Date().toISOString(), source, line: safe.slice(0, 4000) });
+    const entry = { at: new Date().toISOString(), source, line: safe.slice(0, 4000) };
+    this.logs.push(entry);
     if (this.logs.length > 1000) this.logs.splice(0, this.logs.length - 1000);
+
+    // Detección reactiva de jugadores en línea
+    const joinMatch = safe.match(/LogDomMatcherSession: Player ADDED to session \[([0-9a-fA-F]+)\]-\[?([^\]\r\n]+)\]?/i)
+      || safe.match(/LogNet: Join succeeded:\s*([^\r\n]+)/i);
+    if (joinMatch) {
+      const userId = joinMatch[2] ? joinMatch[1] : `player-${joinMatch[1]}`;
+      const userName = (joinMatch[2] ? joinMatch[2] : joinMatch[1]).replace(/"/g, "").trim();
+      this.onlinePlayers.set(userId, {
+        userId,
+        userName,
+        joinedAt: new Date().toISOString(),
+      });
+    }
+
+    const leaveMatch = safe.match(/LogDomMatcherSession: Player Removed from session \[([0-9a-fA-F]+)\]/i)
+      || safe.match(/ClientRequestDisconnect : DisconnectMe .* Character Name\[([^\]]+)\]/i);
+    if (leaveMatch) {
+      const key = leaveMatch[1];
+      for (const [uid, p] of this.onlinePlayers.entries()) {
+        if (uid === key || p.userName === key) {
+          this.onlinePlayers.delete(uid);
+          break;
+        }
+      }
+    }
+
+    this.emit("log", entry);
   }
 
   enqueue(fn) {
@@ -339,6 +428,9 @@ export class Runtime {
     const next = validateSettings(input, this.settings);
     await atomicWrite(SETTINGS_FILE, `${JSON.stringify(next, null, 2)}\n`);
     this.settings = next;
+    await this.syncEngineIni();
+    this.setupBackupSchedule();
+    this.setupVpnWatchdog();
     this.addLog("panel", "Configuración guardada.");
     return publicSettings(this.settings);
   }
@@ -353,6 +445,7 @@ export class Runtime {
       RSDW_PASSWORD: this.settings.worldPassword,
       RSDW_ADMIN_PASSWORD: this.settings.adminPassword,
       RSDW_ADMINS: this.settings.administrators,
+      RSDW_PLATFORM_POLICY: this.settings.platformPolicy || "Crossplay",
       RSDW_PORT: String(GAME_PORT),
       RSDW_AUTO_STOP_ON_UPDATE: this.settings.autoUpdate ? "true" : "false",
       STEAMAPPVALIDATE: validate ? "1" : "0",
@@ -615,10 +708,14 @@ export class Runtime {
           stat(filePath),
           readWorldRulesFromFile(filePath).catch(() => ({
             detected: false,
+            gameMode: 1,
+            gameModeLabel: GAME_MODE_LABELS[1],
             difficulty: 1,
             difficultyLabel: DIFFICULTY_LABELS[1],
             pvpEnabled: false,
             pvpLabel: PVP_LABELS[0],
+            crossplayEnabled: true,
+            crossplayLabel: CROSSPLAY_LABELS[1],
           })),
         ]);
         worldsMap.set(entry.name, {
@@ -628,10 +725,14 @@ export class Runtime {
           updatedAt: info.mtime.toISOString(),
           active: entry.name.replace(/\.sav$/i, "") === this.settings.worldName,
           rules: {
+            gameMode: rules.gameMode ?? 1,
+            gameModeLabel: rules.gameModeLabel ?? (GAME_MODE_LABELS[rules.gameMode ?? 1] || "Estándar"),
             difficulty: rules.difficulty ?? 1,
             difficultyLabel: rules.difficultyLabel ?? "Normal",
             pvpEnabled: Boolean(rules.pvpEnabled),
             pvpLabel: rules.pvpLabel ?? (rules.pvpEnabled ? "Activado (JcJ)" : "Desactivado (Coop)"),
+            crossplayEnabled: rules.crossplayEnabled !== undefined ? Boolean(rules.crossplayEnabled) : true,
+            crossplayLabel: rules.crossplayLabel ?? ((rules.crossplayEnabled ?? true) ? "Habilitado" : "Deshabilitado"),
             detected: Boolean(rules.detected),
           },
         });
@@ -661,6 +762,11 @@ export class Runtime {
         let content = (await exists(iniPath)) ? await readFile(iniPath, "utf8") : "";
         const updates = {};
         if (worldName) updates.DefaultWorldName = worldName;
+        if (this.settings.serverName) updates.ServerName = this.settings.serverName;
+        if (this.settings.ownerId) updates.OwnerId = this.settings.ownerId;
+        if (this.settings.worldPassword) updates.WorldPassword = this.settings.worldPassword;
+        if (this.settings.adminPassword) updates.AdminPassword = this.settings.adminPassword;
+        updates.PlatformPolicy = this.settings.platformPolicy || "Crossplay";
         if (typeof rules.difficulty === "number") {
           updates.DifficultyType = String(rules.difficulty);
           updates.SurvivalDifficulty = String(rules.difficulty);
@@ -669,6 +775,11 @@ export class Runtime {
           updates.PvpEnabled = rules.pvpEnabled ? "1" : "0";
           updates.FriendlyFire = rules.pvpEnabled ? "1" : "0";
           updates.bFriendlyFire = rules.pvpEnabled ? "1" : "0";
+        }
+        if (!content) {
+          content = ";METADATA=(Diff=true, UseCommands=true)\n";
+          updates.PlatformPolicy = this.settings.platformPolicy || "Crossplay";
+          updates.bAllowSendingCrashDumps = "True";
         }
         content = updateIniSection(content, "/Script/Dominion.DedicatedServerSettings", updates);
         content = updateIniSection(content, "ServerSettings", updates);
@@ -697,9 +808,11 @@ export class Runtime {
       this.settings.worldName = clean;
       await atomicWrite(SETTINGS_FILE, `${JSON.stringify(this.settings, null, 2)}\n`);
       await this.syncDedicatedServerIni(clean, rules);
+      const modeLabel = GAME_MODE_LABELS[rules.gameMode] ?? `Modo ${rules.gameMode}`;
       const diffLabel = DIFFICULTY_LABELS[rules.difficulty] ?? rules.difficulty;
       const pvpLabel = rules.pvpEnabled ? "Activado" : "Desactivado";
-      this.addLog("world", `Mundo activo fijado en [${clean}] con reglas: Dificultad=${diffLabel}, Fuego amigo/JcJ=${pvpLabel}`);
+      const crossplayLabel = rules.crossplayEnabled ? "Habilitado" : "Deshabilitado";
+      this.addLog("world", `Mundo activo fijado en [${clean}] con reglas: Modo=${modeLabel}, Dificultad=${diffLabel}, Fuego amigo/JcJ=${pvpLabel}, Crossplay=${crossplayLabel}`);
       return result;
     });
   }
@@ -731,19 +844,378 @@ export class Runtime {
     return { name: `${cleanTarget}.sav`, baseName: cleanTarget };
   }
 
+  getDedicatedServerIniPaths() {
+    return [
+      join(SERVER_DIR, "RSDragonwilds", "Saved", "Config", "LinuxServer", "DedicatedServer.ini"),
+      join(SERVER_DIR, "RSDragonwilds", "Saved", "Config", "WindowsServer", "DedicatedServer.ini"),
+    ];
+  }
+
+  async listKnownPlayers() {
+    const paths = this.getDedicatedServerIniPaths();
+    let content = "";
+    for (const p of paths) {
+      if (await exists(p)) {
+        content = await readFile(p, "utf8");
+        break;
+      }
+    }
+    const playersMap = new Map();
+    if (content) {
+      const lines = content.split(/\r?\n/);
+      for (const line of lines) {
+        if (line.trim().startsWith("KnownPlayerList=")) {
+          const parsed = parseKnownPlayer(line.trim());
+          if (parsed) {
+            playersMap.set(parsed.userId, parsed);
+          }
+        }
+      }
+    }
+
+    if (this.settings.ownerId && !playersMap.has(this.settings.ownerId)) {
+      playersMap.set(this.settings.ownerId, {
+        userId: this.settings.ownerId,
+        userName: "Owner",
+        privileges: 14,
+        isAdmin: true,
+        isBanned: false,
+        isOwner: true,
+      });
+    }
+
+    const knownPlayers = Array.from(playersMap.values()).map((p) => {
+      const isOnline = this.onlinePlayers.has(p.userId) ||
+        [...this.onlinePlayers.values()].some((op) => op.userName.toLowerCase() === p.userName.toLowerCase());
+      return {
+        ...p,
+        isOwner: p.userId === this.settings.ownerId,
+        isOnline,
+      };
+    });
+
+    const onlinePlayers = Array.from(this.onlinePlayers.values()).map((op) => {
+      const known = playersMap.get(op.userId) ||
+        [...playersMap.values()].find((kp) => kp.userName.toLowerCase() === op.userName.toLowerCase());
+      return {
+        ...op,
+        isAdmin: Boolean(known?.isAdmin),
+        isBanned: Boolean(known?.isBanned),
+        isOwner: op.userId === this.settings.ownerId,
+      };
+    });
+
+    return {
+      knownPlayers,
+      onlinePlayers,
+    };
+  }
+
+  async addKnownPlayer(input) {
+    const cleanId = cleanText(input.userId, 64).replace(/[^a-zA-Z0-9_-]/g, "");
+    const cleanName = cleanText(input.userName, 64);
+    if (!cleanId) throw new Error("El Player ID es obligatorio y debe ser alfanumérico.");
+    if (!cleanName) throw new Error("El nombre de usuario es obligatorio.");
+    const isAdmin = Boolean(input.isAdmin);
+    const isBanned = Boolean(input.isBanned);
+
+    const paths = this.getDedicatedServerIniPaths();
+    for (const iniPath of paths) {
+      await mkdir(dirname(iniPath), { recursive: true });
+      let content = (await exists(iniPath)) ? await readFile(iniPath, "utf8") : "";
+      const lines = content ? content.split(/\r?\n/) : [];
+      let inSection = false;
+      let foundExisting = false;
+      const newLines = [];
+      const formatted = formatKnownPlayer({ userId: cleanId, userName: cleanName, isAdmin, isBanned });
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+          if (inSection && !foundExisting) {
+            newLines.push(formatted);
+            foundExisting = true;
+          }
+          inSection = trimmed.toLowerCase() === "[/script/dominion.dedicatedserversettings]";
+          newLines.push(line);
+          continue;
+        }
+        if (inSection && trimmed.startsWith("KnownPlayerList=")) {
+          const parsed = parseKnownPlayer(trimmed);
+          if (parsed && parsed.userId === cleanId) {
+            newLines.push(formatted);
+            foundExisting = true;
+            continue;
+          }
+        }
+        newLines.push(line);
+      }
+
+      if (!foundExisting) {
+        const secIdx = newLines.findIndex((l) => l.trim().toLowerCase() === "[/script/dominion.dedicatedserversettings]");
+        if (secIdx >= 0) {
+          newLines.splice(secIdx + 1, 0, formatted);
+        } else {
+          newLines.push("[/Script/Dominion.DedicatedServerSettings]");
+          newLines.push(formatted);
+        }
+      }
+
+      await atomicWrite(iniPath, newLines.join("\n") + "\n", 0o666, GAME_UID, GAME_GID);
+      try {
+        await chown(iniPath, GAME_UID, GAME_GID);
+        await chmod(iniPath, 0o666);
+      } catch {}
+    }
+
+    this.addLog("panel", `Jugador registrado/actualizado: ${cleanName} (${cleanId}) - Admin=${isAdmin}, Banned=${isBanned}`);
+    return {
+      userId: cleanId,
+      userName: cleanName,
+      privileges: isAdmin ? 14 : 0,
+      isAdmin,
+      isBanned,
+      isOwner: cleanId === this.settings.ownerId,
+    };
+  }
+
+  async updateKnownPlayer(userId, updates = {}) {
+    const cleanId = cleanText(userId, 64);
+    if (!cleanId) throw new Error("Player ID inválido.");
+    const paths = this.getDedicatedServerIniPaths();
+    let updatedPlayer = null;
+
+    for (const iniPath of paths) {
+      if (!(await exists(iniPath))) continue;
+      const content = await readFile(iniPath, "utf8");
+      const lines = content.split(/\r?\n/);
+      const newLines = [];
+      let modified = false;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("KnownPlayerList=")) {
+          const parsed = parseKnownPlayer(trimmed);
+          if (parsed && parsed.userId === cleanId) {
+            const userName = updates.userName !== undefined ? cleanText(updates.userName, 64) : parsed.userName;
+            const isAdmin = updates.isAdmin !== undefined ? Boolean(updates.isAdmin) : parsed.isAdmin;
+            const isBanned = updates.isBanned !== undefined ? Boolean(updates.isBanned) : parsed.isBanned;
+            updatedPlayer = {
+              userId: cleanId,
+              userName,
+              privileges: isAdmin ? 14 : 0,
+              isAdmin,
+              isBanned,
+              isOwner: cleanId === this.settings.ownerId,
+            };
+            newLines.push(formatKnownPlayer(updatedPlayer));
+            modified = true;
+            continue;
+          }
+        }
+        newLines.push(line);
+      }
+
+      if (modified) {
+        await atomicWrite(iniPath, newLines.join("\n") + "\n", 0o666, GAME_UID, GAME_GID);
+        try {
+          await chown(iniPath, GAME_UID, GAME_GID);
+          await chmod(iniPath, 0o666);
+        } catch {}
+      }
+    }
+
+    if (!updatedPlayer) {
+      const userName = updates.userName ? cleanText(updates.userName, 64) : (cleanId === this.settings.ownerId ? "Owner" : cleanId);
+      return await this.addKnownPlayer({
+        userId: cleanId,
+        userName,
+        isAdmin: updates.isAdmin !== undefined ? Boolean(updates.isAdmin) : (cleanId === this.settings.ownerId),
+        isBanned: Boolean(updates.isBanned),
+      });
+    }
+
+    if (updatedPlayer.isBanned) {
+      this.onlinePlayers.delete(cleanId);
+    }
+    this.addLog("panel", `Permisos de jugador actualizados: ${updatedPlayer.userName} (${cleanId}) - Admin=${updatedPlayer.isAdmin}, Banned=${updatedPlayer.isBanned}`);
+    return updatedPlayer;
+  }
+
+  async removeKnownPlayer(userId) {
+    const cleanId = cleanText(userId, 64);
+    if (!cleanId) throw new Error("Player ID inválido.");
+    if (cleanId === this.settings.ownerId) throw new Error("No se puede eliminar al propietario del servidor.");
+    const paths = this.getDedicatedServerIniPaths();
+
+    for (const iniPath of paths) {
+      if (!(await exists(iniPath))) continue;
+      const content = await readFile(iniPath, "utf8");
+      const lines = content.split(/\r?\n/);
+      const newLines = lines.filter((line) => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("KnownPlayerList=")) {
+          const parsed = parseKnownPlayer(trimmed);
+          return parsed?.userId !== cleanId;
+        }
+        return true;
+      });
+      await atomicWrite(iniPath, newLines.join("\n") + "\n", 0o666, GAME_UID, GAME_GID);
+      try {
+        await chown(iniPath, GAME_UID, GAME_GID);
+        await chmod(iniPath, 0o666);
+      } catch {}
+    }
+    this.onlinePlayers.delete(cleanId);
+    this.addLog("panel", `Jugador eliminado de KnownPlayerList: ${cleanId}`);
+    return { ok: true };
+  }
+
+  async syncEngineIni() {
+    const tickRate = Number(this.settings.performance?.tickRate) || 60;
+    const enginePaths = [
+      join(SERVER_DIR, "RSDragonwilds", "Saved", "Config", "LinuxServer", "Engine.ini"),
+      join(SERVER_DIR, "RSDragonwilds", "Saved", "Config", "WindowsServer", "Engine.ini"),
+    ];
+
+    for (const iniPath of enginePaths) {
+      try {
+        await mkdir(dirname(iniPath), { recursive: true });
+        let content = (await exists(iniPath)) ? await readFile(iniPath, "utf8") : "";
+        content = updateIniSection(content, "/Script/OnlineSubsystemUtils.IpNetDriver", {
+          NetServerMaxTickRate: String(tickRate),
+          LanServerMaxTickRate: String(tickRate),
+        });
+        content = updateIniSection(content, "/Script/Engine.Engine", {
+          NetClientTicksPerSecond: String(tickRate),
+        });
+        await atomicWrite(iniPath, content, 0o666, GAME_UID, GAME_GID);
+        try {
+          await chown(iniPath, GAME_UID, GAME_GID);
+          await chmod(iniPath, 0o666);
+        } catch {}
+      } catch (err) {
+        this.addLog("panel", `Aviso al sincronizar Engine.ini: ${err.message}`);
+      }
+    }
+  }
+
+  setupBackupSchedule() {
+    if (this.backupScheduleTimer) {
+      clearInterval(this.backupScheduleTimer);
+      this.backupScheduleTimer = null;
+    }
+    const schedule = this.settings.backupSchedule || "disabled";
+    if (schedule === "disabled") return;
+
+    const hours = schedule === "6h" ? 6 : schedule === "12h" ? 12 : 24;
+    const ms = hours * 3600 * 1000;
+    this.backupScheduleTimer = setInterval(() => {
+      this.enqueue(() => this.createBackup(`scheduled-${schedule}`)).catch((err) => {
+        this.addLog("backup", `Error en backup programado (${schedule}): ${err.message}`);
+      });
+    }, ms);
+    this.backupScheduleTimer.unref?.();
+    this.addLog("backup", `Programación de backups activa: cada ${hours} horas.`);
+  }
+
+  setupVpnWatchdog() {
+    if (this.vpnWatchdogTimer) {
+      clearInterval(this.vpnWatchdogTimer);
+      this.vpnWatchdogTimer = null;
+    }
+    if (this.settings.networkMode !== "wireguard") return;
+
+    this.vpnWatchdogTimer = setInterval(async () => {
+      try {
+        if (this.settings.networkMode !== "wireguard") return;
+        const vpn = await this.vpnStatus();
+        if (!vpn.active) return;
+        if (vpn.handshakeAgeSec !== null && vpn.handshakeAgeSec > 180) {
+          if (this.serverState === "running" || this.desiredRunning) {
+            this.addLog("vpn", `Watchdog: WireGuard handshake inactivo por ${vpn.handshakeAgeSec}s (>180s). Reconectando interfaz...`);
+            await this.applyVpn();
+          }
+        }
+      } catch {}
+    }, 30_000);
+    this.vpnWatchdogTimer.unref?.();
+  }
+
+  async getMetrics() {
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
+    const memPercent = totalMem > 0 ? Math.round((usedMem / totalMem) * 100) : 0;
+    const nodeRss = process.memoryUsage().rss;
+
+    let gameCpu = 0;
+    let gameMemMb = 0;
+    if (this.child?.pid) {
+      try {
+        const res = await command("ps", ["-p", String(this.child.pid), "-o", "%cpu,rss", "--no-headers"], { allowFailure: true });
+        if (res.code === 0 && res.stdout) {
+          const parts = res.stdout.trim().split(/\s+/);
+          gameCpu = parseFloat(parts[0]) || 0;
+          gameMemMb = Math.round((parseInt(parts[1], 10) || 0) / 1024);
+        }
+      } catch {}
+    }
+
+    return {
+      system: {
+        totalMemMb: Math.round(totalMem / (1024 * 1024)),
+        usedMemMb: Math.round(usedMem / (1024 * 1024)),
+        freeMemMb: Math.round(freeMem / (1024 * 1024)),
+        memPercent,
+        cpuCount: os.cpus().length,
+        loadAvg: os.loadavg(),
+      },
+      process: {
+        pid: this.child?.pid || null,
+        running: Boolean(this.child),
+        cpuPercent: gameCpu,
+        memoryMb: gameMemMb,
+      },
+      panel: {
+        memoryMb: Math.round(nodeRss / (1024 * 1024)),
+      },
+    };
+  }
+
   async vpnStatus() {
     if (process.env.MOCK_GAME === "1") {
-      return { active: this.settings.networkMode === "wireguard", handshakeAt: null, endpoint: this.settings.vpn.endpoint, transfer: "simulado" };
+      return {
+        active: this.settings.networkMode === "wireguard",
+        handshakeAt: null,
+        handshakeAgeSec: null,
+        healthy: this.settings.networkMode === "wireguard",
+        endpoint: this.settings.vpn.endpoint,
+        transfer: "simulado",
+      };
     }
     const result = await command("wg", ["show", "wg-vps", "dump"], { allowFailure: true });
-    if (result.code !== 0) return { active: false, handshakeAt: null, endpoint: this.settings.vpn.endpoint, transfer: "0 B" };
+    if (result.code !== 0) {
+      return {
+        active: false,
+        handshakeAt: null,
+        handshakeAgeSec: null,
+        healthy: false,
+        endpoint: this.settings.vpn.endpoint,
+        transfer: "0 B",
+      };
+    }
     const lines = result.stdout.split("\n");
     const peer = lines[1]?.split("\t") || [];
     const handshake = Number(peer[4] || 0);
+    const handshakeAgeSec = handshake ? Math.max(0, Math.floor((Date.now() - handshake * 1000) / 1000)) : null;
+    const healthy = handshakeAgeSec === null || handshakeAgeSec < 180;
     return {
       active: true,
       endpoint: peer[2] || this.settings.vpn.endpoint,
       handshakeAt: handshake ? new Date(handshake * 1000).toISOString() : null,
+      handshakeAgeSec,
+      healthy,
       received: Number(peer[5] || 0),
       sent: Number(peer[6] || 0),
     };
@@ -792,7 +1264,13 @@ export class Runtime {
   }
 
   async status() {
-    const [vpn, worlds, backups] = await Promise.all([this.vpnStatus(), this.listWorlds(), this.listBackups()]);
+    const [vpn, worlds, backups, metrics, knownData] = await Promise.all([
+      this.vpnStatus(),
+      this.listWorlds(),
+      this.listBackups(),
+      this.getMetrics(),
+      this.listKnownPlayers().catch(() => ({ knownPlayers: [], onlinePlayers: [] })),
+    ]);
     return {
       configured: this.settings.configured,
       server: {
@@ -806,6 +1284,12 @@ export class Runtime {
       worlds,
       backupCount: backups.length,
       latestBackup: backups[0] || null,
+      backupSchedule: this.settings.backupSchedule || "disabled",
+      performance: this.settings.performance || { tickRate: 60 },
+      onlinePlayers: knownData.onlinePlayers || Array.from(this.onlinePlayers.values()),
+      playerCount: this.onlinePlayers.size,
+      maxPlayers: 6,
+      metrics,
       logs: this.logs.slice(-120),
     };
   }

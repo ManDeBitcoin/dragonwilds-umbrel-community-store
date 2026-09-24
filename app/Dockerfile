@@ -20,8 +20,10 @@ COPY package.json /opt/dragonwilds/package.json
 COPY src /opt/dragonwilds/src
 COPY public /opt/dragonwilds/public
 COPY start.sh /opt/dragonwilds/start.sh
+COPY entrypoint-game.sh /opt/dragonwilds/entrypoint-game.sh
+COPY seed-data /opt/dragonwilds/seed-data
 
-RUN chmod 0755 /opt/dragonwilds/start.sh
+RUN chmod 0755 /opt/dragonwilds/start.sh /opt/dragonwilds/entrypoint-game.sh
 
 ENV WEB_PORT=8080 \
     DATA_DIR=/data/control \
@@ -30,7 +32,9 @@ ENV WEB_PORT=8080 \
     WG_DIR=/etc/wireguard \
     GAME_PORT=23409 \
     GAME_UID=1000 \
-    GAME_GID=1000
+    GAME_GID=1000 \
+    GAME_ENTRY=/opt/dragonwilds/entrypoint-game.sh \
+    STEAMAPPID=4019830
 
 EXPOSE 8080/tcp 23409/udp 24520/udp
 

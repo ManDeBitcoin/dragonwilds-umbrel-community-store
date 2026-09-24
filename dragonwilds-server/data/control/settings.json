@@ -1,0 +1,30 @@
+{
+  "configured": true,
+  "ownerId": "00025be9182947128e2c6f899f51e1ba",
+  "serverName": "ChamapTV",
+  "worldName": "Chavito",
+  "worldPassword": "Nepesucio",
+  "adminPassword": "",
+  "administrators": "000293c9dc02469eb0959c6b74781ebd,000299e8be034a28a0e01be52fc967c8,0002d8eb1f3b4bf3bd3210b9dea9c490,0002d71d75c244468d4a7438ac03da03,0002bd4e6d3043d2b4c24f9b074a5d92",
+  "platformPolicy": "Crossplay",
+  "autoStart": false,
+  "autoUpdate": true,
+  "backupRetention": 10,
+  "networkMode": "wireguard",
+  "vpn": {
+    "address": "10.8.0.2/24",
+    "listenPort": 51831,
+    "privateKey": "OLvJfJnV0iQDveYhENZu/Z2zlSW5EBkpP+M23eXMCWc=",
+    "peerPublicKey": "5o5efgELqwX6Y1G3ginaAQ3dUtssPiPVFSB3cBg/EGY=",
+    "presharedKey": "GhIoDJRg3QR2Lw9/PJ7TkR0DbE9fLV1JX0umkXPYiEM=",
+    "endpoint": "152.53.54.0:51820",
+    "allowedIPs": "0.0.0.0/0",
+    "keepalive": 10,
+    "routeTable": 23409,
+    "dnsBypass": [
+      "1.1.1.1",
+      "9.9.9.9",
+      "8.8.8.8"
+    ]
+  }
+}
