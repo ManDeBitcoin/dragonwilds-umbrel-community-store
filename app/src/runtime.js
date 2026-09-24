@@ -401,6 +401,10 @@ export class Runtime extends EventEmitter {
         userName,
         joinedAt: new Date().toISOString(),
       });
+      this.emit("players", {
+        onlinePlayers: Array.from(this.onlinePlayers.values()),
+        playerCount: this.onlinePlayers.size,
+      });
     }
 
     const leaveMatch = safe.match(/LogDomMatcherSession: Player Removed from session \[([0-9a-fA-F]+)\]/i)
@@ -413,6 +417,10 @@ export class Runtime extends EventEmitter {
           break;
         }
       }
+      this.emit("players", {
+        onlinePlayers: Array.from(this.onlinePlayers.values()),
+        playerCount: this.onlinePlayers.size,
+      });
     }
 
     this.emit("log", entry);
@@ -496,6 +504,7 @@ export class Runtime extends EventEmitter {
     this.desiredRunning = true;
     this.serverState = "starting";
     this.serverMessage = options.validate ? "Validando archivos y arrancando" : "Actualizando y arrancando";
+    this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
     await this.applyVpn();
     await mkdir(WORLD_DIR, { recursive: true });
     try {
@@ -528,27 +537,34 @@ export class Runtime extends EventEmitter {
       this.serverState = "running";
       this.serverMessage = `Escuchando en UDP ${GAME_PORT} y ${BEACON_PORT}`;
       this.addLog("panel", "Proceso del servidor iniciado.");
+      this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: this.startedAt });
     });
     this.child.once("error", (error) => {
       this.serverState = "error";
       this.serverMessage = error.message;
       this.addLog("panel", `No se pudo arrancar: ${error.message}`);
       this.child = null;
+      this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
     });
     this.child.once("exit", (code, signal) => {
       this.addLog("panel", `Servidor detenido (código ${code ?? "-"}, señal ${signal ?? "-"}).`);
       this.child = null;
       this.startedAt = null;
+      this.onlinePlayers.clear();
+      this.emit("players", { onlinePlayers: [], playerCount: 0 });
       if (this.desiredRunning) {
         this.serverState = "starting";
         this.serverMessage = "Reinicio automático en 5 segundos";
+        this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
         setTimeout(() => this.enqueue(() => this.start()).catch((error) => {
           this.serverState = "error";
           this.serverMessage = error.message;
+          this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
         }), 5000);
       } else {
         this.serverState = "stopped";
         this.serverMessage = "Servidor detenido";
+        this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
       }
     });
   }
@@ -558,10 +574,12 @@ export class Runtime extends EventEmitter {
     if (!this.child) {
       this.serverState = "stopped";
       this.serverMessage = "Servidor detenido";
+      this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
       return;
     }
     this.serverState = "stopping";
     this.serverMessage = "Guardando y deteniendo";
+    this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: this.startedAt });
     const child = this.child;
     child.kill("SIGTERM");
     await Promise.race([
@@ -569,6 +587,11 @@ export class Runtime extends EventEmitter {
       new Promise((resolveStop) => setTimeout(resolveStop, 45_000)),
     ]);
     if (this.child === child) child.kill("SIGKILL");
+    this.onlinePlayers.clear();
+    this.serverState = "stopped";
+    this.serverMessage = "Servidor detenido";
+    this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
+    this.emit("players", { onlinePlayers: [], playerCount: 0 });
   }
 
   async restart(options = {}) {

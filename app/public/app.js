@@ -12,6 +12,7 @@ const app = {
   activeLogFilter: "all",
   logEventSource: null,
   poller: null,
+  fastPoller: null,
   localLogClearedAt: 0,
   cpuHistory: [],
   ramHistory: [],
@@ -45,6 +46,7 @@ function toast(message, error = false) {
 
 function showAuth() {
   clearInterval(app.poller);
+  stopFastPolling();
   if (app.logEventSource) {
     app.logEventSource.close();
     app.logEventSource = null;
@@ -385,6 +387,12 @@ function renderStatus(status) {
   renderActivity(status.logs);
   renderLogs(status.logs);
   renderOnlinePlayers(status.onlinePlayers || []);
+
+  if (status.server.state === "starting" || status.server.state === "stopping") {
+    if (!app.fastPoller) triggerFastPolling();
+  } else {
+    stopFastPolling();
+  }
 }
 
 function renderWorlds(worlds) {
@@ -566,6 +574,15 @@ function initLogStream() {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "connected") return;
+        if (data.type === "state") {
+          refreshStatus(true);
+          return;
+        }
+        if (data.type === "players") {
+          refreshStatus(true);
+          loadPlayers();
+          return;
+        }
         if (!app.status) app.status = { logs: [] };
         if (!app.status.logs) app.status.logs = [];
         app.status.logs.push(data);
@@ -582,6 +599,32 @@ function initLogStream() {
     };
   } catch (err) {
     console.warn("No se pudo iniciar EventSource SSE:", err);
+  }
+}
+
+function triggerFastPolling(durationMs = 20000) {
+  if (app.fastPoller) clearInterval(app.fastPoller);
+  app.fastPoller = setInterval(async () => {
+    try {
+      const status = await api("/api/status");
+      renderStatus(status);
+    } catch {}
+  }, 1000);
+
+  clearTimeout(triggerFastPolling.timer);
+  triggerFastPolling.timer = setTimeout(() => {
+    stopFastPolling();
+  }, durationMs);
+}
+
+function stopFastPolling() {
+  if (app.fastPoller) {
+    clearInterval(app.fastPoller);
+    app.fastPoller = null;
+  }
+  if (triggerFastPolling.timer) {
+    clearTimeout(triggerFastPolling.timer);
+    triggerFastPolling.timer = null;
   }
 }
 
@@ -826,6 +869,7 @@ function settingsPayload(form) {
 async function serverAction(action) {
   const labels = { start: "Arrancando servidor…", stop: "Deteniendo servidor…", restart: "Reiniciando servidor…", update: "Creando backup y actualizando…", validate: "Validando archivos…" };
   toast(labels[action]);
+  triggerFastPolling(30000);
   await api(`/api/server/${action}`, { method: "POST" });
   await refreshStatus(false);
 }
@@ -909,7 +953,22 @@ $("#nav").addEventListener("click", (event) => {
 $$(`[data-goto]`).forEach((button) => button.addEventListener("click", () => navigate(button.dataset.goto)));
 window.addEventListener("hashchange", () => navigate(location.hash.slice(1)));
 
-$("#refresh").addEventListener("click", () => refreshStatus(false));
+async function handleManualRefresh() {
+  const refreshBtn = $("#refresh");
+  if (refreshBtn) refreshBtn.classList.add("rotating");
+  toast("Actualizando datos del servidor…");
+  try {
+    await Promise.all([refreshStatus(false), loadPlayers(), loadBackups()]);
+  } catch (err) {
+    showError(err);
+  } finally {
+    if (refreshBtn) {
+      setTimeout(() => refreshBtn.classList.remove("rotating"), 500);
+    }
+  }
+}
+
+$("#refresh").addEventListener("click", handleManualRefresh);
 $("#quick-toggle").addEventListener("click", () => serverAction(currentToggleAction()).catch(showError));
 $("#hero-toggle").addEventListener("click", () => serverAction(currentToggleAction()).catch(showError));
 $("#quick-restart").addEventListener("click", () => serverAction("restart").catch(showError));
@@ -1124,6 +1183,29 @@ window.addEventListener("resize", () => {
   }
   if (app.ramHistory && app.ramHistory.length) {
     drawSparkline("ram-sparkline", app.ramHistory, "#f0ae50", "rgba(240, 174, 80, 0.2)", false);
+  }
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    refreshStatus(true);
+    loadPlayers();
+  }
+});
+
+window.addEventListener("focus", () => {
+  refreshStatus(true);
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "r" || e.key === "R") {
+    const tag = (document.activeElement?.tagName || "").toLowerCase();
+    if (["input", "textarea", "select"].includes(tag) || document.activeElement?.isContentEditable) {
+      return;
+    }
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    e.preventDefault();
+    handleManualRefresh();
   }
 });
 

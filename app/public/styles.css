@@ -221,8 +221,17 @@ dialog { width:min(430px,calc(100vw - 2rem));border:1px solid var(--line);border
 .status-tag.banned { background: #e96c5622; color: var(--red); }
 .status-tag.active { background: #9ddc7b14; color: var(--green); }
 
-.player-actions-cell { display: flex; gap: 0.4rem; justify-content: flex-end; align-items: center; }
-
 .log-filter.active { background: var(--green) !important; color: #121f15 !important; font-weight: 800; }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.rotating svg,
+.rotating .action-svg {
+  animation: spin 0.65s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
 
 

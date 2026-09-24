@@ -23,6 +23,8 @@ const runtime = new Runtime();
 const sessions = new Map();
 const loginAttempts = new Map();
 let localAuth = null;
+const APP_VERSION = "0.1.5";
+const BUILD_ID = `${APP_VERSION}-${Date.now().toString(36)}`;
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -199,6 +201,8 @@ async function api(req, res, url) {
       needsLocalPassword: !ADMIN_PASSWORD && !localAuth?.hash,
       managedByUmbrel: Boolean(ADMIN_PASSWORD),
       configured: runtime.settings.configured,
+      buildId: BUILD_ID,
+      version: APP_VERSION,
     });
   }
 
@@ -404,13 +408,31 @@ async function api(req, res, url) {
       "connection": "keep-alive",
       "x-accel-buffering": "no",
     });
-    res.write(`data: ${JSON.stringify({ type: "connected" })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: "connected", buildId: BUILD_ID })}\n\n`);
+
     const onLog = (entry) => {
-      res.write(`data: ${JSON.stringify(entry)}\n\n`);
+      try { res.write(`data: ${JSON.stringify(entry)}\n\n`); } catch {}
     };
+    const onState = (state) => {
+      try { res.write(`data: ${JSON.stringify({ type: "state", ...state })}\n\n`); } catch {}
+    };
+    const onPlayers = (players) => {
+      try { res.write(`data: ${JSON.stringify({ type: "players", ...players })}\n\n`); } catch {}
+    };
+
     runtime.on("log", onLog);
+    runtime.on("state", onState);
+    runtime.on("players", onPlayers);
+
+    const pingTimer = setInterval(() => {
+      try { res.write(": ping\n\n"); } catch {}
+    }, 15_000);
+
     req.on("close", () => {
+      clearInterval(pingTimer);
       runtime.off("log", onLog);
+      runtime.off("state", onState);
+      runtime.off("players", onPlayers);
     });
     return;
   }
@@ -462,15 +484,36 @@ async function staticFile(req, res, url) {
   } catch {
     path = join(PUBLIC_DIR, "index.html");
   }
+  // Interceptar index.html para inyección dinámica de versión anti-caché
+  if (path.endsWith("index.html")) {
+    let html = await readFile(path, "utf8");
+    html = html
+      .replace(/href="\/styles\.css(\?[^"]*)?"/g, `href="/styles.css?v=${BUILD_ID}"`)
+      .replace(/src="\/app\.js(\?[^"]*)?"/g, `src="/app.js?v=${BUILD_ID}"`);
+    res.writeHead(200, {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-cache, no-store, must-revalidate, max-age=0",
+      "pragma": "no-cache",
+      "expires": "0",
+      "etag": `"${BUILD_ID}"`,
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "no-referrer",
+      "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    });
+    return res.end(html);
+  }
+
   const type = mimeTypes[extname(path)] || "application/octet-stream";
+  const isCode = path.endsWith(".js") || path.endsWith(".css") || path.endsWith(".json");
   const headers = {
     "content-type": type,
     "x-content-type-options": "nosniff",
     "referrer-policy": "no-referrer",
     "permissions-policy": "camera=(), microphone=(), geolocation=()",
-    "cache-control": (path.endsWith(".html") || path.endsWith(".js") || path.endsWith(".css"))
-      ? "no-cache, no-store, must-revalidate"
-      : "public, max-age=3600",
+    "cache-control": isCode
+      ? "no-cache, no-store, must-revalidate, max-age=0"
+      : "public, max-age=86400",
+    ...(isCode ? { pragma: "no-cache", expires: "0" } : {}),
   };
   res.writeHead(200, headers);
   createReadStream(path).pipe(res);
