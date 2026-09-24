@@ -423,29 +423,35 @@ function renderStatus(status) {
 function renderWorlds(worlds) {
   const datalist = $("#world-datalist");
   if (datalist) {
-    datalist.innerHTML = worlds.map((w) => `<option value="${escapeHtml(w.baseName || w.name.replace(/\.sav$/i, ""))}"></option>`).join("");
+    const datalistHtml = worlds.map((w) => `<option value="${escapeHtml(w.baseName || w.name.replace(/\.sav$/i, ""))}"></option>`).join("");
+    if (datalist.innerHTML !== datalistHtml) {
+      datalist.innerHTML = datalistHtml;
+    }
   }
 
   const worldSelect = $("#rules-world-select");
   if (worldSelect && worlds.length) {
     const currentVal = worldSelect.value || $("#rules-world-input")?.value;
-    worldSelect.innerHTML = worlds.map((w) => {
+    const targetBase = worlds.some((w) => (w.baseName || w.name.replace(/\.sav$/i, "")) === currentVal)
+      ? currentVal
+      : ((worlds.find((w) => w.active) || worlds[0]).baseName || (worlds.find((w) => w.active) || worlds[0]).name.replace(/\.sav$/i, ""));
+
+    const newOptionsHtml = worlds.map((w) => {
       const base = w.baseName || w.name.replace(/\.sav$/i, "");
       const activeTag = w.active ? " (Activo)" : "";
       return `<option value="${escapeHtml(base)}">${escapeHtml(base)}${activeTag}</option>`;
     }).join("");
 
-    const targetBase = worlds.some((w) => (w.baseName || w.name.replace(/\.sav$/i, "")) === currentVal)
-      ? currentVal
-      : ((worlds.find((w) => w.active) || worlds[0]).baseName || (worlds.find((w) => w.active) || worlds[0]).name.replace(/\.sav$/i, ""));
+    if (worldSelect.innerHTML !== newOptionsHtml) {
+      worldSelect.innerHTML = newOptionsHtml;
+      worldSelect.value = targetBase;
+    } else if (worldSelect.value !== targetBase && !app.worldRulesDirty) {
+      worldSelect.value = targetBase;
+    }
 
-    const prevTarget = worldSelect.value;
-    worldSelect.value = targetBase;
-    if (!app.worldRulesLoaded || (prevTarget && prevTarget !== targetBase)) {
-      if (!app.worldRulesDirty) {
-        loadWorldRulesIntoForm(targetBase, worlds);
-        app.worldRulesLoaded = true;
-      }
+    if (!app.worldRulesLoaded) {
+      loadWorldRulesIntoForm(targetBase, worlds);
+      app.worldRulesLoaded = true;
     }
   }
 
@@ -517,7 +523,7 @@ function loadWorldRulesIntoForm(worldName, worldsList = app.status?.worlds || []
   }
 
   const modeVal = String(world?.rules?.gameMode ?? 1);
-  const diffVal = String(world?.rules?.difficulty ?? 1);
+  const diffVal = String(world?.rules?.difficulty ?? 0);
   const pvpVal = Boolean(world?.rules?.pvpEnabled);
   const crossplayVal = world?.rules?.crossplayEnabled !== undefined ? Boolean(world?.rules?.crossplayEnabled) : true;
 
@@ -1132,7 +1138,8 @@ $("#rules-world-select")?.addEventListener("change", async (event) => {
   loadWorldRulesIntoForm(name);
   try {
     const fresh = await api(`/api/worlds/${encodeURIComponent(name)}/rules`);
-    if (fresh) {
+    // Proteger contra condiciones de carrera: NO sobreescribir si el usuario ya empezó a editar o si cambió de mundo
+    if (fresh && !app.worldRulesDirty && $("#rules-world-input")?.value === name) {
       const modeSelect = $("#rules-mode-select");
       if (modeSelect && typeof fresh.gameMode === "number") modeSelect.value = String(fresh.gameMode);
       const diffSelect = $("#rules-difficulty-select");
@@ -1158,17 +1165,25 @@ $("#rules-activate-btn")?.addEventListener("click", () => {
   if (targetWorld) activateWorld(targetWorld);
 });
 
-$("#rules-mode-select")?.addEventListener("change", markRulesFormDirty);
-$("#rules-difficulty-select")?.addEventListener("change", markRulesFormDirty);
+["change", "input"].forEach((evt) => {
+  $("#rules-mode-select")?.addEventListener(evt, markRulesFormDirty);
+  $("#rules-difficulty-select")?.addEventListener(evt, markRulesFormDirty);
 
-$("#rules-pvp-toggle")?.addEventListener("change", (event) => {
-  updatePvpToggleLabels(event.target.checked);
-  markRulesFormDirty();
+  $("#rules-pvp-toggle")?.addEventListener(evt, (event) => {
+    updatePvpToggleLabels(event.target.checked);
+    markRulesFormDirty();
+  });
+
+  $("#rules-crossplay-toggle")?.addEventListener(evt, (event) => {
+    updateCrossplayToggleLabels(event.target.checked);
+    markRulesFormDirty();
+  });
 });
 
-$("#rules-crossplay-toggle")?.addEventListener("change", (event) => {
-  updateCrossplayToggleLabels(event.target.checked);
-  markRulesFormDirty();
+$$(".toggle-card").forEach((card) => {
+  card.addEventListener("click", () => {
+    markRulesFormDirty();
+  });
 });
 
 $("#world-rules-form")?.addEventListener("submit", async (event) => {
