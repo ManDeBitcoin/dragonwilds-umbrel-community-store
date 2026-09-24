@@ -390,12 +390,22 @@ export class Runtime extends EventEmitter {
     this.logs.push(entry);
     if (this.logs.length > 1000) this.logs.splice(0, this.logs.length - 1000);
 
-    // Detección reactiva de jugadores en línea
-    const joinMatch = safe.match(/LogDomMatcherSession: Player ADDED to session \[([0-9a-fA-F]+)\]-\[?([^\]\r\n]+)\]?/i)
-      || safe.match(/LogNet: Join succeeded:\s*([^\r\n]+)/i);
-    if (joinMatch) {
-      const userId = joinMatch[2] ? joinMatch[1] : `player-${joinMatch[1]}`;
-      const userName = (joinMatch[2] ? joinMatch[2] : joinMatch[1]).replace(/"/g, "").trim();
+    // Detección reactiva de jugadores en línea (evita duplicar eventos de handshake y sesión)
+    const matcherMatch = safe.match(/LogDomMatcherSession: Player ADDED to session \[([0-9a-fA-F]+)\]-\[?([^\]\r\n]+)\]?/i);
+    const joinSucceededMatch = safe.match(/LogNet: Join succeeded:\s*([^\r\n]+)/i);
+
+    if (matcherMatch) {
+      const userId = matcherMatch[1];
+      const userName = matcherMatch[2].replace(/"/g, "").trim();
+      const lowerName = userName.toLowerCase();
+
+      // Limpiar cualquier entrada previa o temporal con el mismo nombre o placeholder
+      for (const [existingId, p] of this.onlinePlayers.entries()) {
+        if (p.userName.toLowerCase() === lowerName || existingId === userId || existingId.toLowerCase() === `player-${lowerName}`) {
+          this.onlinePlayers.delete(existingId);
+        }
+      }
+
       this.onlinePlayers.set(userId, {
         userId,
         userName,
@@ -405,22 +415,56 @@ export class Runtime extends EventEmitter {
         onlinePlayers: Array.from(this.onlinePlayers.values()),
         playerCount: this.onlinePlayers.size,
       });
-    }
+    } else if (joinSucceededMatch) {
+      const rawName = joinSucceededMatch[1].replace(/"/g, "").trim();
+      const lowerName = rawName.toLowerCase();
 
-    const leaveMatch = safe.match(/LogDomMatcherSession: Player Removed from session \[([0-9a-fA-F]+)\]/i)
-      || safe.match(/ClientRequestDisconnect : DisconnectMe .* Character Name\[([^\]]+)\]/i);
-    if (leaveMatch) {
-      const key = leaveMatch[1];
-      for (const [uid, p] of this.onlinePlayers.entries()) {
-        if (uid === key || p.userName === key) {
-          this.onlinePlayers.delete(uid);
+      // Verificar si ya está registrado (por ejemplo si la sesión EOS ya fue procesada)
+      let alreadyExists = false;
+      for (const [, p] of this.onlinePlayers.entries()) {
+        if (p.userName.toLowerCase() === lowerName) {
+          alreadyExists = true;
           break;
         }
       }
-      this.emit("players", {
-        onlinePlayers: Array.from(this.onlinePlayers.values()),
-        playerCount: this.onlinePlayers.size,
-      });
+
+      if (!alreadyExists) {
+        const userId = `player-${rawName}`;
+        this.onlinePlayers.set(userId, {
+          userId,
+          userName: rawName,
+          joinedAt: new Date().toISOString(),
+        });
+        this.emit("players", {
+          onlinePlayers: Array.from(this.onlinePlayers.values()),
+          playerCount: this.onlinePlayers.size,
+        });
+      }
+    }
+
+    const leaveMatch = safe.match(/LogDomMatcherSession: Player Removed from session \[([0-9a-fA-F]+)\]/i)
+      || safe.match(/ClientRequestDisconnect : DisconnectMe .* Character Name\[([^\]]+)\]/i)
+      || safe.match(/UNetConnection::Close:.*PlayerName:\s*([^\r\n,]+)/i);
+    if (leaveMatch) {
+      const key = leaveMatch[1].trim();
+      const lowerKey = key.toLowerCase();
+      let changed = false;
+      for (const [uid, p] of this.onlinePlayers.entries()) {
+        if (
+          uid.toLowerCase() === lowerKey ||
+          p.userName.toLowerCase() === lowerKey ||
+          uid.toLowerCase() === `player-${lowerKey}`
+        ) {
+          this.onlinePlayers.delete(uid);
+          changed = true;
+        }
+      }
+      if (changed) {
+        this.emit("players", {
+          onlinePlayers: Array.from(this.onlinePlayers.values()),
+          playerCount: this.onlinePlayers.size,
+        });
+      }
     }
 
     this.emit("log", entry);
@@ -917,7 +961,19 @@ export class Runtime extends EventEmitter {
       };
     });
 
-    const onlinePlayers = Array.from(this.onlinePlayers.values()).map((op) => {
+    // Deduplicar onlinePlayers por nombre asegurando que si existe el EOS ID oficial (32 hex) prevalezca
+    const dedupedOnlineMap = new Map();
+    for (const op of this.onlinePlayers.values()) {
+      const key = (op.userName || op.userId || "").toLowerCase();
+      const existing = dedupedOnlineMap.get(key);
+      if (!existing) {
+        dedupedOnlineMap.set(key, op);
+      } else if (!/^[0-9a-fA-F]{32}$/.test(existing.userId) && /^[0-9a-fA-F]{32}$/.test(op.userId)) {
+        dedupedOnlineMap.set(key, op);
+      }
+    }
+
+    const onlinePlayers = Array.from(dedupedOnlineMap.values()).map((op) => {
       const known = playersMap.get(op.userId) ||
         [...playersMap.values()].find((kp) => kp.userName.toLowerCase() === op.userName.toLowerCase());
       return {
@@ -1310,7 +1366,7 @@ export class Runtime extends EventEmitter {
       backupSchedule: this.settings.backupSchedule || "disabled",
       performance: this.settings.performance || { tickRate: 60 },
       onlinePlayers: knownData.onlinePlayers || Array.from(this.onlinePlayers.values()),
-      playerCount: this.onlinePlayers.size,
+      playerCount: (knownData.onlinePlayers || Array.from(this.onlinePlayers.values())).length,
       maxPlayers: 6,
       metrics,
       logs: this.logs.slice(-120),

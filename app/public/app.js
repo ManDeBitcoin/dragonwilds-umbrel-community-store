@@ -198,12 +198,29 @@ function drawSparkline(canvasId, data, strokeColor = "#9ddc7b", fillColor = "rgb
   ctx.restore();
 }
 
+function deduplicatePlayers(players = []) {
+  const map = new Map();
+  for (const p of players) {
+    if (!p) continue;
+    const key = (p.userName || p.userId || "").toLowerCase().trim();
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, p);
+    } else if (!/^[0-9a-fA-F]{32}$/.test(existing.userId) && /^[0-9a-fA-F]{32}$/.test(p.userId)) {
+      map.set(key, p);
+    }
+  }
+  return Array.from(map.values());
+}
+
 function renderPlayerSlots(onlineCount, maxPlayers = 6, onlinePlayers = []) {
+  const uniquePlayers = deduplicatePlayers(onlinePlayers);
+  const effectiveCount = Math.max(0, uniquePlayers.length > 0 ? uniquePlayers.length : onlineCount);
   const pill = $("#player-slots-indicator");
   if (pill) {
     let nodes = "";
     for (let i = 0; i < maxPlayers; i++) {
-      const occupied = i < onlineCount;
+      const occupied = i < effectiveCount;
       nodes += `<span class="slot-node ${occupied ? "occupied" : ""}" title="Slot ${i + 1}: ${occupied ? "Ocupado" : "Libre"}"></span>`;
     }
     pill.innerHTML = nodes;
@@ -211,16 +228,16 @@ function renderPlayerSlots(onlineCount, maxPlayers = 6, onlinePlayers = []) {
 
   const badge = $("#slots-badge-count");
   if (badge) {
-    badge.textContent = `${onlineCount} / ${maxPlayers} Ocupados`;
-    badge.className = `badge-mini ${onlineCount > 0 ? "online" : ""}`;
+    badge.textContent = `${effectiveCount} / ${maxPlayers} Ocupados`;
+    badge.className = `badge-mini ${effectiveCount > 0 ? "online" : ""}`;
   }
 
   const rosterVisual = $("#roster-slots-visual");
   if (rosterVisual) {
     let orbs = "";
     for (let i = 0; i < maxPlayers; i++) {
-      const isOccupied = i < onlineCount;
-      const player = isOccupied ? onlinePlayers[i] : null;
+      const isOccupied = i < effectiveCount;
+      const player = isOccupied ? uniquePlayers[i] : null;
       const name = player ? escapeHtml(player.userName) : `Slot ${i + 1}`;
       orbs += `
         <div class="roster-slot-orb ${isOccupied ? "occupied" : "empty"}" title="${name} (${isOccupied ? "En línea" : "Disponible"})">
@@ -329,7 +346,8 @@ function renderStatus(status) {
   $("#setup-banner").classList.toggle("hidden", status.configured);
 
   // Telemetry & Players
-  const onlineCount = status.playerCount ?? status.onlinePlayers?.length ?? 0;
+  const uniquePlayers = deduplicatePlayers(status.onlinePlayers || []);
+  const onlineCount = uniquePlayers.length;
   const maxPlayers = status.maxPlayers || 6;
   const onlineMetric = $("#metric-online-players");
   if (onlineMetric) onlineMetric.textContent = `${onlineCount} / ${maxPlayers}`;
@@ -337,7 +355,7 @@ function renderStatus(status) {
   if (onlineDetail) onlineDetail.textContent = onlineCount ? `${onlineCount} jugador(es) activo(s)` : "Ninguno conectado";
 
   // Visual slot nodes & roster
-  renderPlayerSlots(onlineCount, maxPlayers, status.onlinePlayers || []);
+  renderPlayerSlots(onlineCount, maxPlayers, uniquePlayers);
 
   if (status.metrics) {
     const gameCpu = status.metrics.process?.cpuPercent || 0;
@@ -388,7 +406,7 @@ function renderStatus(status) {
   renderWorlds(status.worlds);
   renderActivity(status.logs);
   renderLogs(status.logs);
-  renderOnlinePlayers(status.onlinePlayers || []);
+  renderOnlinePlayers(uniquePlayers);
 
   if (status.server.state === "starting" || status.server.state === "stopping") {
     if (!app.fastPoller) triggerFastPolling();
@@ -670,18 +688,19 @@ async function loadPlayers() {
 }
 
 function renderOnlinePlayers(players) {
+  const uniquePlayers = deduplicatePlayers(players);
   const countSpan = $("#online-players-count");
-  if (countSpan) countSpan.textContent = players.length;
+  if (countSpan) countSpan.textContent = uniquePlayers.length;
 
   const list = $("#online-players-list");
   if (!list) return;
 
-  if (!players.length) {
+  if (!uniquePlayers.length) {
     list.innerHTML = '<p class="empty">No hay jugadores conectados en este momento.</p>';
     return;
   }
 
-  list.innerHTML = players.map((p) => `
+  list.innerHTML = uniquePlayers.map((p) => `
     <div class="list-row" style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid var(--line);">
       <div class="player-user-cell" style="gap: 0.85rem;">
         <div class="player-avatar-wrap">${generatePlayerAvatar(p.userId, p.userName)}</div>

@@ -152,21 +152,36 @@ test("Runtime detecta reactivamente jugadores online y desconexiones desde logs"
 
   assert.equal(rt.onlinePlayers.size, 0);
 
-  // Simular evento de conexión UE5
+  // Simular evento inicial de handshake UE5 (LogNet)
+  rt.addLog("server", "LogNet: Join succeeded: ChamapTV");
+  assert.equal(rt.onlinePlayers.size, 1);
+  assert.equal(rt.onlinePlayers.has("player-ChamapTV"), true);
+
+  // Simular confirmación de sesión EOS para el mismo jugador: debe actualizar el placeholder al EOS ID oficial sin duplicar
   rt.addLog("server", "LogDomMatcherSession: Player ADDED to session [00025be9182947128e2c6f899f51e1ba]-[ChamapTV]");
   assert.equal(rt.onlinePlayers.size, 1);
+  assert.equal(rt.onlinePlayers.has("player-ChamapTV"), false);
   const p = rt.onlinePlayers.get("00025be9182947128e2c6f899f51e1ba");
+  assert.ok(p);
   assert.equal(p.userName, "ChamapTV");
 
-  // Segundo jugador conecta
-  rt.addLog("server", "LogDomMatcherSession: Player ADDED to session [000293c9dc02469eb0959c6b74781ebd]-[lordmatty_]");
+  // Segundo jugador conecta (primero LogNet, luego MatcherSession)
+  rt.addLog("server", "LogNet: Join succeeded: snakesan7");
+  assert.equal(rt.onlinePlayers.size, 2);
+  rt.addLog("server", "LogDomMatcherSession: Player ADDED to session [0002bd4a6d3043d2b4c24f9b074a5d92]-[snakesan7]");
+  assert.equal(rt.onlinePlayers.size, 2);
+  assert.equal(rt.onlinePlayers.has("player-snakesan7"), false);
+  assert.equal(rt.onlinePlayers.has("0002bd4a6d3043d2b4c24f9b074a5d92"), true);
+
+  // Si llega un LogNet tardío o duplicado para ChamapTV, NO debe duplicarse
+  rt.addLog("server", "LogNet: Join succeeded: ChamapTV");
   assert.equal(rt.onlinePlayers.size, 2);
 
   // Primer jugador desconecta
   rt.addLog("server", "LogDomMatcherSession: Player Removed from session [00025be9182947128e2c6f899f51e1ba]");
   assert.equal(rt.onlinePlayers.size, 1);
   assert.equal(rt.onlinePlayers.has("00025be9182947128e2c6f899f51e1ba"), false);
-  assert.equal(rt.onlinePlayers.has("000293c9dc02469eb0959c6b74781ebd"), true);
+  assert.equal(rt.onlinePlayers.has("0002bd4a6d3043d2b4c24f9b074a5d92"), true);
 });
 
 test("Runtime.getMetrics devuelve estructura de telemetría completa", async () => {
