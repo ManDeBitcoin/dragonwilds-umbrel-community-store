@@ -1164,9 +1164,20 @@ export class Runtime extends EventEmitter {
         content = updateIniSection(content, "/Script/OnlineSubsystemUtils.IpNetDriver", {
           NetServerMaxTickRate: String(tickRate),
           LanServerMaxTickRate: String(tickRate),
+          MaxClientRate: "150000",
+          MaxInternetClientRate: "150000",
         });
         content = updateIniSection(content, "/Script/Engine.Engine", {
           NetClientTicksPerSecond: String(tickRate),
+        });
+        content = updateIniSection(content, "Core.Log", {
+          LogScript: "Error",
+          LogNetPlayerMovement: "Error",
+        });
+        content = updateIniSection(content, "/Script/Engine.GameNetworkManager", {
+          TotalNetBandwidth: "600000",
+          MaxDynamicBandwidth: "150000",
+          MinDynamicBandwidth: "20000",
         });
         await atomicWrite(iniPath, content, 0o666, GAME_UID, GAME_GID);
         try {
