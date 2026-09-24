@@ -68,6 +68,15 @@ mkdir -p "${TARGET_DATA_DIR}/backups"
 mkdir -p "${TARGET_DATA_DIR}/control"
 mkdir -p "${TARGET_DATA_DIR}/wireguard"
 
+# Crear backup de seguridad automático previo si ya existen datos en destino
+if [[ -d "${TARGET_DATA_DIR}/server/RSDragonwilds/Saved/SaveGames" && -n "$(ls -A "${TARGET_DATA_DIR}/server/RSDragonwilds/Saved/SaveGames" 2>/dev/null)" ]]; then
+  BACKUP_TIMESTAMP="$(date +%Y-%m-%d-%H%M%S)"
+  PRE_BACKUP="${TARGET_DATA_DIR}/backups/pre-migration-${BACKUP_TIMESTAMP}.tar.gz"
+  echo "Creando backup de seguridad previo en ${PRE_BACKUP}..."
+  tar -czf "${PRE_BACKUP}" -C "${TARGET_DATA_DIR}/server/RSDragonwilds" Saved 2>/dev/null || true
+  echo "Backup de seguridad guardado. Si lo necesitas, podrás restaurarlo en cualquier momento desde el panel."
+fi
+
 # 1. Copiar partidas guardadas (SaveGames)
 if [[ -d "${SAVED_SRC}/SaveGames" ]]; then
   echo "Copiando partidas guardadas (SaveGames)..."
