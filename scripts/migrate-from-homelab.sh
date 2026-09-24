@@ -4,16 +4,50 @@ set -Eeuo pipefail
 # Script de migración desde entorno independiente / home-lab hacia Dragonwilds en Umbrel
 
 SRC_DIR="${1:-}"
-TARGET_DATA_DIR="${2:-/home/umbrel/umbrel/app-data/dragonwilds-server/data}"
+TARGET_DATA_DIR="${2:-}"
+
+# Auto-detección del directorio de origen (Homelab) si no se especifica
+if [[ -z "${SRC_DIR}" ]]; then
+  for candidate in \
+    "/home/umbrel/umbrel/home-lab/runescape" \
+    "${HOME}/umbrel/home-lab/runescape" \
+    "${HOME}/home-lab/runescape" \
+    "/home/umbrel/dragonwilds-migration"
+  do
+    if [[ -d "${candidate}" ]]; then
+      SRC_DIR="${candidate}"
+      break
+    fi
+  done
+fi
 
 if [[ -z "${SRC_DIR}" ]]; then
-  echo "Uso: $0 <directorio-origen-runescape-o-migracion> [directorio-destino-app-data]" >&2
+  echo "Uso: $0 [directorio-origen-runescape-o-migracion] [directorio-destino-app-data]" >&2
   echo "Ejemplo: $0 /home/umbrel/umbrel/home-lab/runescape" >&2
-  echo "         $0 /home/umbrel/dragonwilds-migration /home/umbrel/umbrel/app-data/dragonwilds-server/data" >&2
   exit 1
 fi
 
-echo "=== Iniciando migración hacia ${TARGET_DATA_DIR} ==="
+# Auto-detección del directorio destino (Umbrel App Data)
+if [[ -z "${TARGET_DATA_DIR}" ]]; then
+  for target_cand in \
+    "/home/umbrel/umbrel/app-data/dragonwilds-server/data" \
+    "${HOME}/umbrel/app-data/dragonwilds-server/data" \
+    "/var/lib/umbrel/app-data/dragonwilds-server/data"
+  do
+    if [[ -d "$(dirname "${target_cand}")" ]]; then
+      TARGET_DATA_DIR="${target_cand}"
+      break
+    fi
+  done
+fi
+
+if [[ -z "${TARGET_DATA_DIR}" ]]; then
+  TARGET_DATA_DIR="/home/umbrel/umbrel/app-data/dragonwilds-server/data"
+fi
+
+echo "=== Dragonwilds Homelab -> Umbrel Migration Tool ==="
+echo "Origen:  ${SRC_DIR}"
+echo "Destino: ${TARGET_DATA_DIR}"
 
 # Localizar carpeta Saved
 SAVED_SRC=""
