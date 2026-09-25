@@ -838,8 +838,12 @@ export class Runtime extends EventEmitter {
     if (!clean) throw new Error("Nombre de mundo inválido.");
     const primary = join(SERVER_DIR, "RSDragonwilds", "Saved", "SaveGames", `${clean}.sav`);
     const fallback = join(SERVER_DIR, "RSDragonwilds", "Saved", "Savegames", `${clean}.sav`);
+    const primaryBackup = join(SERVER_DIR, "RSDragonwilds", "Saved", "SaveGames", `${clean}.backup`);
+    const fallbackBackup = join(SERVER_DIR, "RSDragonwilds", "Saved", "Savegames", `${clean}.backup`);
     if (await exists(primary)) return primary;
     if (await exists(fallback)) return fallback;
+    if (await exists(primaryBackup)) return primaryBackup;
+    if (await exists(fallbackBackup)) return fallbackBackup;
     return primary;
   }
 

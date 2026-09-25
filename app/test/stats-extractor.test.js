@@ -181,5 +181,65 @@ test("extractWorldStatsFromBuffers: fusiona múltiples buffers y añade discordC
   assert.equal(stats.players[0].name, "PlayerTwo"); // higher XP
   assert.ok(stats.players[0].discordCard.includes("PlayerTwo"));
   assert.ok(stats.highlights.topXp.player === "PlayerTwo");
+  assert.equal(stats.highlights.topXp.podium.length, 2);
+  assert.equal(stats.highlights.topXp.podium[0].player, "PlayerTwo");
+  assert.equal(stats.highlights.topXp.podium[1].player, "PlayerOne");
 });
+
+test("calculateHighlights y curiosidades: calcula 'lo bueno y lo malo' y podio con medallas", () => {
+  const players = [
+    {
+      name: "Guerrero",
+      totalXp: 100000,
+      totalLevel: 250,
+      playtimeHours: 20,
+      uniqueKillsCount: 30,
+      structuresBuilt: 10,
+      shrinesCount: 2,
+      journalCount: 100,
+      spellsCount: 5,
+      walkedDistanceMeters: 5000,
+    },
+    {
+      name: "Pacifico",
+      totalXp: 5000,
+      totalLevel: 20,
+      playtimeHours: 2,
+      uniqueKillsCount: 0,
+      structuresBuilt: 0,
+      shrinesCount: 0,
+      journalCount: 5,
+      spellsCount: 0,
+      walkedDistanceMeters: 200,
+    },
+    {
+      name: "Arquitecto",
+      totalXp: 40000,
+      totalLevel: 120,
+      playtimeHours: 15,
+      uniqueKillsCount: 5,
+      structuresBuilt: 80,
+      shrinesCount: 4,
+      journalCount: 50,
+      spellsCount: 2,
+      walkedDistanceMeters: 1200,
+    },
+  ];
+
+  const hl = calculateHighlights(players);
+  // Podio Top 3
+  assert.equal(hl.topXp.podium[0].player, "Guerrero");
+  assert.equal(hl.topXp.podium[0].medal, "🥇");
+  assert.equal(hl.topXp.podium[1].player, "Arquitecto");
+  assert.equal(hl.topXp.podium[1].medal, "🥈");
+  assert.equal(hl.topXp.podium[2].player, "Pacifico");
+  assert.equal(hl.topXp.podium[2].medal, "🥉");
+
+  // Curiosidades
+  assert.equal(hl.curiosities.pacifist.player, "Pacifico");
+  assert.equal(hl.curiosities.nomad.player, "Pacifico");
+  assert.equal(hl.curiosities.sleeper.player, "Pacifico");
+  assert.equal(hl.curiosities.traveler.player, "Guerrero");
+});
+
 

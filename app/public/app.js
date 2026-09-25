@@ -1064,6 +1064,7 @@ function renderLeaderboard(stats) {
     { key: "topArchitect", gold: false, icon: "🏰" },
     { key: "topExplorer", gold: false, icon: "🧭" },
     { key: "topScholar", gold: false, icon: "📜" },
+    { key: "topTraveler", gold: false, icon: "🏃" },
   ];
 
   if (podiumGrid) {
@@ -1071,6 +1072,19 @@ function renderLeaderboard(stats) {
       .filter((c) => hl[c.key])
       .map((c) => {
         const item = hl[c.key];
+        const runnersHtml = Array.isArray(item.podium) && item.podium.length > 1
+          ? `
+            <div class="podium-runners">
+              ${item.podium.slice(1).map((r) => `
+                <div class="podium-runner-row">
+                  <span class="runner-name">${r.medal} ${escapeHtml(r.player)}</span>
+                  <span class="runner-metric">${escapeHtml(r.metric)}</span>
+                </div>
+              `).join("")}
+            </div>
+          `
+          : "";
+
         return `
           <div class="podium-card ${c.gold ? "gold" : ""}">
             <div class="podium-card-header">
@@ -1079,6 +1093,39 @@ function renderLeaderboard(stats) {
             </div>
             <div class="podium-card-player" title="${escapeHtml(item.player)}">${escapeHtml(item.player)}</div>
             <div class="podium-card-metric">${escapeHtml(item.metric)}</div>
+            ${runnersHtml}
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  // Menciones Especiales & Curiosidades ("Lo Bueno, lo Malo y lo Curioso")
+  const curiositiesGrid = $("#leaderboard-curiosities-grid");
+  const cur = hl.curiosities || {};
+  const curKeys = [
+    { key: "pacifist", icon: "🕊️" },
+    { key: "nomad", icon: "⛺" },
+    { key: "sleeper", icon: "🛋️" },
+    { key: "minimalist", icon: "🎒" },
+    { key: "traveler", icon: "🏃" },
+    { key: "rookie", icon: "🐣" },
+  ];
+
+  if (curiositiesGrid) {
+    curiositiesGrid.innerHTML = curKeys
+      .filter((c) => cur[c.key])
+      .map((c) => {
+        const item = cur[c.key];
+        return `
+          <div class="podium-card fun">
+            <div class="podium-card-header">
+              <span class="podium-card-title">${escapeHtml(item.title)}</span>
+              <span class="podium-card-icon">${c.icon}</span>
+            </div>
+            <div class="podium-card-player" title="${escapeHtml(item.player)}">${escapeHtml(item.player)}</div>
+            <div class="podium-card-metric">${escapeHtml(item.metric)}</div>
+            <div class="podium-card-desc">“${escapeHtml(item.desc)}”</div>
           </div>
         `;
       })
@@ -1102,6 +1149,19 @@ function renderLeaderboard(stats) {
       const hcBadge = p.isHardcore
         ? '<span class="status-badge" style="background: #e96c5622; color: var(--red); border: 1px solid #e96c5644; font-size: 0.65rem;">HARDCORE</span>'
         : "";
+      const regBadge = p.registeredOnly
+        ? `<span class="status-badge" style="background: rgba(255,255,255,0.08); color: var(--muted); border: 1px solid rgba(255,255,255,0.15); font-size: 0.65rem;">${escapeHtml(p.platform || "REGISTRADO")}</span>`
+        : "";
+
+      const titleBadge = p.titleBadge
+        ? `<div class="player-title-badge ${escapeHtml(p.titleBadge.badgeClass || "gold")}">${p.titleBadge.icon || "⭐"} ${escapeHtml(p.titleBadge.title)}</div>`
+        : "";
+
+      const extraTags = p.titleBadge?.tags?.length
+        ? `<div class="player-extra-tags">${p.titleBadge.tags.map((t) => `<span class="player-tag-pill">${escapeHtml(t)}</span>`).join("")}</div>`
+        : "";
+
+      const playtimeLabel = p.registeredOnly ? "Cuenta registrada en el reino" : `${p.playtimeHours} horas jugadas`;
 
       return `
         <article class="player-stat-card">
@@ -1110,7 +1170,9 @@ function renderLeaderboard(stats) {
               <div class="player-avatar-circle">${escapeHtml(initial)}</div>
               <div>
                 <h4 class="player-stat-card-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</h4>
-                <p class="player-stat-card-subtitle">${p.playtimeHours} horas jugadas ${hcBadge}</p>
+                <p class="player-stat-card-subtitle">${playtimeLabel} ${hcBadge} ${regBadge}</p>
+                ${titleBadge}
+                ${extraTags}
               </div>
             </div>
           </div>

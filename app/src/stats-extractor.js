@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
+import { readFile, readdir } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 
 /**
  * Calcula el nivel estimado según la curva clásica de experiencia de RuneScape (1 a 99).
@@ -227,7 +227,8 @@ export function processPlayerProfile(raw, worldStructures = {}) {
 }
 
 /**
- * Determina los ganadores de cada categoría ("Dragonwilds Wrapped Highlights").
+ * Determina los ganadores de cada categoría ("Dragonwilds Wrapped Highlights"),
+ * incluyendo podio Top 3 y menciones curiosas ("lo bueno y lo malo").
  */
 export function calculateHighlights(players) {
   if (!players || players.length === 0) return {};
@@ -239,6 +240,24 @@ export function calculateHighlights(players) {
   const byShrines = [...players].sort((a, b) => b.shrinesCount - a.shrinesCount);
   const byJournal = [...players].sort((a, b) => b.journalCount - a.journalCount);
   const bySpells = [...players].sort((a, b) => b.spellsCount - a.spellsCount);
+  const byDistance = [...players].sort((a, b) => (b.walkedDistanceMeters || 0) - (a.walkedDistanceMeters || 0));
+
+  // Rankings inversos o curiosos ("lo malo o curioso")
+  const byKillsAsc = [...players].sort((a, b) => a.uniqueKillsCount - b.uniqueKillsCount);
+  const byStructuresAsc = [...players].sort((a, b) => a.structuresBuilt - b.structuresBuilt);
+  const byHoursAsc = [...players].sort((a, b) => a.playtimeHours - b.playtimeHours);
+  const byJournalAsc = [...players].sort((a, b) => a.journalCount - b.journalCount);
+  const byDistanceAsc = [...players].sort((a, b) => (a.walkedDistanceMeters || 0) - (b.walkedDistanceMeters || 0));
+  const byXpAsc = [...players].sort((a, b) => a.totalXp - b.totalXp);
+
+  const makePodium = (arr, metricFn, valKey) =>
+    arr.slice(0, 3).map((p, idx) => ({
+      rank: idx + 1,
+      medal: idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉",
+      player: p.name,
+      metric: metricFn(p),
+      val: valKey ? p[valKey] : p.totalXp,
+    }));
 
   return {
     topXp: {
@@ -247,6 +266,7 @@ export function calculateHighlights(players) {
       player: byXp[0]?.name || "Nadie",
       metric: `${byXp[0]?.totalXp.toLocaleString("es-ES")} XP (Nivel ${byXp[0]?.totalLevel})`,
       val: byXp[0]?.totalXp || 0,
+      podium: makePodium(byXp, (p) => `${p.totalXp.toLocaleString("es-ES")} XP (Niv. ${p.totalLevel})`, "totalXp"),
     },
     topPlaytime: {
       title: "El Incombustible",
@@ -254,6 +274,7 @@ export function calculateHighlights(players) {
       player: byHours[0]?.name || "Nadie",
       metric: `${byHours[0]?.playtimeHours} horas de juego`,
       val: byHours[0]?.playtimeHours || 0,
+      podium: makePodium(byHours, (p) => `${p.playtimeHours}h`, "playtimeHours"),
     },
     topKills: {
       title: "Asesino de Bestias",
@@ -261,6 +282,7 @@ export function calculateHighlights(players) {
       player: byKills[0]?.name || "Nadie",
       metric: `${byKills[0]?.uniqueKillsCount} jefes y monstruos únicos`,
       val: byKills[0]?.uniqueKillsCount || 0,
+      podium: makePodium(byKills, (p) => `${p.uniqueKillsCount} jefes`, "uniqueKillsCount"),
     },
     topArchitect: {
       title: "Gran Arquitecto",
@@ -268,6 +290,7 @@ export function calculateHighlights(players) {
       player: byStructures[0]?.name || "Nadie",
       metric: `${byStructures[0]?.structuresBuilt} construcciones en el mapa`,
       val: byStructures[0]?.structuresBuilt || 0,
+      podium: makePodium(byStructures, (p) => `${p.structuresBuilt} bases`, "structuresBuilt"),
     },
     topExplorer: {
       title: "Gran Peregrino",
@@ -275,6 +298,7 @@ export function calculateHighlights(players) {
       player: byShrines[0]?.name || "Nadie",
       metric: `${byShrines[0]?.shrinesCount} santuarios sagrados activados`,
       val: byShrines[0]?.shrinesCount || 0,
+      podium: makePodium(byShrines, (p) => `${p.shrinesCount} santuarios`, "shrinesCount"),
     },
     topScholar: {
       title: "Erudito del Saber",
@@ -282,6 +306,15 @@ export function calculateHighlights(players) {
       player: byJournal[0]?.name || "Nadie",
       metric: `${byJournal[0]?.journalCount} recetas y descubrimientos`,
       val: byJournal[0]?.journalCount || 0,
+      podium: makePodium(byJournal, (p) => `${p.journalCount} recetas`, "journalCount"),
+    },
+    topTraveler: {
+      title: "El Trotamundos",
+      icon: "compass",
+      player: byDistance[0]?.name || "Nadie",
+      metric: `${(byDistance[0]?.walkedDistanceMeters || 0).toLocaleString("es-ES")} m a pie`,
+      val: byDistance[0]?.walkedDistanceMeters || 0,
+      podium: makePodium(byDistance, (p) => `${(p.walkedDistanceMeters || 0).toLocaleString("es-ES")}m`, "walkedDistanceMeters"),
     },
     topMage: {
       title: "Archimago",
@@ -289,7 +322,128 @@ export function calculateHighlights(players) {
       player: bySpells[0]?.name || "Nadie",
       metric: `${bySpells[0]?.spellsCount} hechizos dominados`,
       val: bySpells[0]?.spellsCount || 0,
+      podium: makePodium(bySpells, (p) => `${p.spellsCount} hechizos`, "spellsCount"),
     },
+
+    // Curiosidades y Menciones Especiales ("Lo Bueno, lo Malo y lo Curioso")
+    curiosities: {
+      pacifist: {
+        title: "El Gran Pacifista",
+        icon: "🕊️",
+        player: byKillsAsc[0]?.name || "Nadie",
+        metric: `${byKillsAsc[0]?.uniqueKillsCount || 0} monstruos eliminados`,
+        tag: "Amante de la paz",
+        desc: "No lastimaría ni a una mosca salvaje",
+      },
+      nomad: {
+        title: "El Nómada Errante",
+        icon: "⛺",
+        player: byStructuresAsc[0]?.name || "Nadie",
+        metric: `${byStructuresAsc[0]?.structuresBuilt || 0} construcciones`,
+        tag: "Sin techo",
+        desc: "Prefiere dormir bajo la luz de las estrellas",
+      },
+      sleeper: {
+        title: "El Visitante Exprés",
+        icon: "🛋️",
+        player: byHoursAsc[0]?.name || "Nadie",
+        metric: `${byHoursAsc[0]?.playtimeHours || 0} horas acumuladas`,
+        tag: "El dormilón",
+        desc: "Entró, saludó y se fue a descansar",
+      },
+      minimalist: {
+        title: "El Minimalista",
+        icon: "🎒",
+        player: byJournalAsc[0]?.name || "Nadie",
+        metric: `${byJournalAsc[0]?.journalCount || 0} recetas en el diario`,
+        tag: "Viaja ligero",
+        desc: "Sin complicaciones de fórmulas complejas",
+      },
+      traveler: {
+        title: "El Maratonista",
+        icon: "🏃",
+        player: byDistance[0]?.name || "Nadie",
+        metric: `${(byDistance[0]?.walkedDistanceMeters || 0).toLocaleString("es-ES")} metros caminados`,
+        tag: "Pies incansables",
+        desc: "Ha recorrido las tierras de palmo a palmo",
+      },
+      rookie: {
+        title: "El Novato Promesa",
+        icon: "🐣",
+        player: byXpAsc[0]?.name || "Nadie",
+        metric: `Nivel ${byXpAsc[0]?.totalLevel || 1} (${byXpAsc[0]?.totalXp || 0} XP)`,
+        tag: "Futuro héroe",
+        desc: "Apenas comienza su gran odisea",
+      },
+    },
+  };
+}
+
+/**
+ * Asigna a cada jugador un título distintivo y medallas secundarias según sus hazañas o peculiaridades.
+ */
+export function assignPlayerHonorificTitle(player, highlights) {
+  const name = player.name;
+  const hl = highlights;
+  const cur = highlights.curiosities || {};
+  const tags = [];
+
+  let primary = null;
+
+  // 1. Títulos de Campeón Absoluto (Oro)
+  if (hl.topXp?.player === name) {
+    primary = { title: "Rey de la Experiencia", icon: "👑", badgeClass: "gold" };
+  } else if (hl.topPlaytime?.player === name) {
+    primary = { title: "El Incombustible", icon: "⏳", badgeClass: "gold" };
+  } else if (hl.topExplorer?.player === name) {
+    primary = { title: "Gran Peregrino", icon: "🧭", badgeClass: "accent" };
+  } else if (hl.topArchitect?.player === name) {
+    primary = { title: "Gran Arquitecto", icon: "🏰", badgeClass: "accent" };
+  } else if (hl.topTraveler?.player === name) {
+    primary = { title: "El Trotamundos", icon: "🏃", badgeClass: "accent" };
+  } else if (hl.topKills?.player === name) {
+    primary = { title: "Asesino de Bestias", icon: "🗡️", badgeClass: "accent" };
+  } else if (hl.topScholar?.player === name) {
+    primary = { title: "Erudito del Saber", icon: "📜", badgeClass: "accent" };
+  }
+
+  // Tags secundarios para logros destacados
+  if (hl.topArchitect?.player === name && primary?.title !== "Gran Arquitecto") tags.push("🏰 Gran Arquitecto");
+  if (hl.topKills?.player === name && primary?.title !== "Asesino de Bestias") tags.push("🗡️ Asesino de Bestias");
+  if (hl.topScholar?.player === name && primary?.title !== "Erudito del Saber") tags.push("📜 Erudito del Saber");
+  if (hl.topMage?.player === name && primary?.title !== "Archimago") tags.push("🪄 Archimago");
+  if (hl.topTraveler?.player === name && primary?.title !== "El Trotamundos") tags.push("🏃 El Maratonista");
+
+  // 2. Si no es #1 de nada, evaluar curiosidades o roles peculiares ("sea bueno o malo")
+  if (!primary) {
+    if (cur.pacifist?.player === name && player.uniqueKillsCount === 0) {
+      primary = { title: "El Gran Pacifista", icon: "🕊️", badgeClass: "fun" };
+      tags.push("🕊️ Amante de la paz");
+    } else if (cur.sleeper?.player === name && player.playtimeHours < 1) {
+      primary = { title: "El Visitante Exprés", icon: "🛋️", badgeClass: "fun" };
+      tags.push("🛋️ El Dormilón");
+    } else if (cur.nomad?.player === name && player.structuresBuilt === 0) {
+      primary = { title: "El Nómada Errante", icon: "⛺", badgeClass: "fun" };
+      tags.push("⛺ Sin techo");
+    } else if (player.registeredOnly) {
+      primary = { title: "Recluta en Entrenamiento", icon: "🐣", badgeClass: "muted" };
+      tags.push("🐣 Novato Promesa");
+    } else if (player.uniqueKillsCount >= 10) {
+      primary = { title: "Cazador Veterano", icon: "⚔️", badgeClass: "info" };
+    } else if (player.totalLevel >= 50) {
+      primary = { title: "Aventurero Curtido", icon: "🛡️", badgeClass: "info" };
+    } else {
+      primary = { title: "Aventurero Valiente", icon: "🧭", badgeClass: "info" };
+    }
+  }
+
+  // Tags adicionales de curiosidades si aplican
+  if (player.uniqueKillsCount === 0 && !tags.some(t => t.includes("Pacifista") || t.includes("Bajas"))) tags.push("🕊️ 0 Bajas");
+  if (player.structuresBuilt === 0 && !tags.some(t => t.includes("Nómada") || t.includes("Bases"))) tags.push("⛺ Sin Bases");
+
+  return {
+    ...primary,
+    tags: Array.from(new Set(tags)),
   };
 }
 
@@ -301,27 +455,48 @@ export function generateDiscordSummary(stats) {
   let md = `🏆 **DRAGONWILDS WRAPPED — MUNDO "${worldName.toUpperCase()}"** 🏆\n\n`;
 
   md += `✨ **PODIO DE HONOR DEL SERVIDOR** ✨\n`;
-  if (highlights.topXp) md += `👑 **${highlights.topXp.title}**: **${highlights.topXp.player}** (${highlights.topXp.metric})\n`;
-  if (highlights.topPlaytime) md += `⏳ **${highlights.topPlaytime.title}**: **${highlights.topPlaytime.player}** (${highlights.topPlaytime.metric})\n`;
-  if (highlights.topKills) md += `🗡️ **${highlights.topKills.title}**: **${highlights.topKills.player}** (${highlights.topKills.metric})\n`;
-  if (highlights.topArchitect) md += `🏰 **${highlights.topArchitect.title}**: **${highlights.topArchitect.player}** (${highlights.topArchitect.metric})\n`;
-  if (highlights.topExplorer) md += `🧭 **${highlights.topExplorer.title}**: **${highlights.topExplorer.player}** (${highlights.topExplorer.metric})\n`;
-  if (highlights.topScholar) md += `📜 **${highlights.topScholar.title}**: **${highlights.topScholar.player}** (${highlights.topScholar.metric})\n`;
+  const formatPodiumRow = (item) => {
+    if (!item) return "";
+    let line = `${item.icon} **${item.title}**: 🥇 **${item.player}** (${item.metric})`;
+    if (Array.isArray(item.podium) && item.podium.length > 1) {
+      const runners = item.podium.slice(1).map(r => `${r.medal} ${r.player} (${r.metric})`).join(" • ");
+      line += `\n   ↳ ${runners}`;
+    }
+    return line + "\n";
+  };
 
-  md += `\n📊 **TABLA DE JUGADORES**\n`;
+  if (highlights.topXp) md += formatPodiumRow(highlights.topXp);
+  if (highlights.topPlaytime) md += formatPodiumRow(highlights.topPlaytime);
+  if (highlights.topKills) md += formatPodiumRow(highlights.topKills);
+  if (highlights.topArchitect) md += formatPodiumRow(highlights.topArchitect);
+  if (highlights.topExplorer) md += formatPodiumRow(highlights.topExplorer);
+  if (highlights.topScholar) md += formatPodiumRow(highlights.topScholar);
+  if (highlights.topTraveler) md += formatPodiumRow(highlights.topTraveler);
+
+  const cur = highlights.curiosities;
+  if (cur) {
+    md += `\n🎭 **LO BUENO, LO MALO Y LO CURIOSO** 🎭\n`;
+    if (cur.pacifist) md += `🕊️ **${cur.pacifist.title}**: **${cur.pacifist.player}** (${cur.pacifist.metric}) — _${cur.pacifist.desc}_\n`;
+    if (cur.nomad) md += `⛺ **${cur.nomad.title}**: **${cur.nomad.player}** (${cur.nomad.metric}) — _${cur.nomad.desc}_\n`;
+    if (cur.sleeper) md += `🛋️ **${cur.sleeper.title}**: **${cur.sleeper.player}** (${cur.sleeper.metric}) — _${cur.sleeper.desc}_\n`;
+    if (cur.minimalist) md += `🎒 **${cur.minimalist.title}**: **${cur.minimalist.player}** (${cur.minimalist.metric}) — _${cur.minimalist.desc}_\n`;
+    if (cur.traveler) md += `🏃 **${cur.traveler.title}**: **${cur.traveler.player}** (${cur.traveler.metric}) — _${cur.traveler.desc}_\n`;
+  }
+
+  md += `\n📊 **TABLA DE AVENTUREROS**\n`;
   md += `\`\`\`\n`;
-  md += `Jugador         | Horas | Total XP | Nivel | Kills | Santuarios | Bases\n`;
-  md += `----------------+-------+----------+-------+-------+------------+------\n`;
+  md += `Jugador         | Título               | Horas | Total XP | Nivel | Kills | Bases\n`;
+  md += `----------------+----------------------+-------+----------+-------+-------+------\n`;
 
   for (const p of players) {
     const namePad = p.name.padEnd(15, " ");
+    const titlePad = (p.titleBadge?.title || "Aventurero").slice(0, 20).padEnd(20, " ");
     const hoursPad = String(p.playtimeHours).padStart(5, " ");
     const xpPad = String(p.totalXp).padStart(8, " ");
     const lvlPad = String(p.totalLevel).padStart(5, " ");
     const killsPad = String(p.uniqueKillsCount).padStart(5, " ");
-    const shrinesPad = String(p.shrinesCount).padStart(10, " ");
     const structPad = String(p.structuresBuilt).padStart(5, " ");
-    md += `${namePad} | ${hoursPad} | ${xpPad} | ${lvlPad} | ${killsPad} | ${shrinesPad} | ${structPad}\n`;
+    md += `${namePad} | ${titlePad} | ${hoursPad} | ${xpPad} | ${lvlPad} | ${killsPad} | ${structPad}\n`;
   }
   md += `\`\`\`\n`;
   md += `_Generado automáticamente por Dragonwilds Server Console._`;
@@ -332,7 +507,11 @@ export function generateDiscordSummary(stats) {
  * Genera una tarjeta de jugador individual en Markdown para Discord.
  */
 export function generatePlayerDiscordCard(player, worldName = "Dragonwilds") {
-  let md = `🎴 **FICHA DE AVENTURERO: ${player.name}** [${worldName}]\n`;
+  const badgeTitle = player.titleBadge?.title ? ` [${player.titleBadge.icon} ${player.titleBadge.title}]` : "";
+  let md = `🎴 **FICHA DE AVENTURERO: ${player.name}**${badgeTitle} [${worldName}]\n`;
+  if (player.titleBadge?.tags && player.titleBadge.tags.length > 0) {
+    md += `• 🏷️ **Distinciones**: ${player.titleBadge.tags.join(", ")}\n`;
+  }
   md += `• ⏳ **Tiempo jugado**: ${player.playtimeHours} horas (${(player.playtimeSeconds / 3600).toFixed(2)}h)\n`;
   md += `• ⭐ **Experiencia Total**: ${player.totalXp.toLocaleString("es-ES")} XP (Nivel general: ${player.totalLevel})\n`;
   md += `• 🗡️ **Jefes y monstruos cazados**: ${player.uniqueKillsCount} tipos únicos\n`;
@@ -340,8 +519,14 @@ export function generatePlayerDiscordCard(player, worldName = "Dragonwilds") {
   md += `• 🧭 **Santuarios sagrados**: ${player.shrinesCount} activados\n`;
   md += `• 📜 **Recetas y diario**: ${player.journalCount} descubrimientos\n`;
   md += `• 🪄 **Hechizos dominados**: ${player.spellsCount}\n`;
+  if (player.walkedDistanceMeters) {
+    md += `• 🏃 **Distancia a pie**: ${player.walkedDistanceMeters.toLocaleString("es-ES")} metros\n`;
+  }
   if (player.namedChests && player.namedChests.length > 0) {
     md += `• 📦 **Cofres nombrados**: ${player.namedChests.join(", ")}\n`;
+  }
+  if (player.platform) {
+    md += `• 🎮 **Plataforma**: ${player.platform}\n`;
   }
   return md;
 }
@@ -399,18 +584,59 @@ export function extractWorldStatsFromBuffers(buffers, worldName = "Mundo") {
     };
   }
 
-  const cleanWorldName = basename(worldName).replace(/\.(sav|backup)$/i, "");
+  const cleanWorldName = basename(worldName).replace(/(\.sav|\.backup)+$/i, "");
 
+  // Procesar perfiles con datos completos de SPUD
   const players = Array.from(uniqueProfiles.values())
-    .map((raw) => {
-      const p = processPlayerProfile(raw, structuresObj);
-      p.discordCard = generatePlayerDiscordCard(p, cleanWorldName);
-      return p;
-    })
-    .sort((a, b) => b.totalXp - a.totalXp);
+    .map((raw) => processPlayerProfile(raw, structuresObj));
+
+  // Añadir jugadores registrados en GameState que aún no tienen SPUD activo
+  for (const [name, gs] of allGameStatePlayers.entries()) {
+    if (!uniqueProfiles.has(name)) {
+      const structInfo = structuresObj[name] || { structuresCount: 0, namedChests: [] };
+      players.push({
+        name,
+        guid: gs.eosId || gs.ps5Id || "",
+        platform: gs.ps5Id ? "PS5" : (gs.eosId ? "PC / Epic" : "Desconocida"),
+        saveCount: 1,
+        isHardcore: false,
+        playtimeSeconds: 0,
+        playtimeHours: 0,
+        totalXp: 0,
+        totalLevel: 1,
+        skills: [],
+        uniqueKillsCount: 0,
+        uniqueKills: [],
+        shrinesCount: 0,
+        spellsCount: 0,
+        journalCount: 0,
+        buildingPiecesCount: 0,
+        structuresBuilt: structInfo.structuresCount,
+        namedChests: structInfo.namedChests,
+        walkedDistanceMeters: 0,
+        lastLocation: "",
+        inventorySlotsOccupied: 0,
+        loadoutSlotsOccupied: 0,
+        registeredOnly: true,
+        rawProfile: { registeredOnly: true, ...gs },
+      });
+    }
+  }
+
+  // Ordenar por experiencia total y tiempo de juego
+  players.sort((a, b) => {
+    if (b.totalXp !== a.totalXp) return b.totalXp - a.totalXp;
+    if (b.playtimeHours !== a.playtimeHours) return b.playtimeHours - a.playtimeHours;
+    return b.structuresBuilt - a.structuresBuilt;
+  });
 
   const highlights = calculateHighlights(players);
 
+  // Asignar título honorífico y tarjeta de Discord a cada aventurero
+  for (const p of players) {
+    p.titleBadge = assignPlayerHonorificTitle(p, highlights);
+    p.discordCard = generatePlayerDiscordCard(p, cleanWorldName);
+  }
 
   return {
     worldName: cleanWorldName,
@@ -428,31 +654,62 @@ export function extractWorldStatsFromBuffer(buffer, worldName = "Mundo") {
 }
 
 /**
- * Lee un archivo .sav o .backup y busca posibles backups hermanos para extraer todas las estadísticas.
+ * Lee un archivo .sav o .backup y busca posibles backups hermanos en la misma carpeta para extraer todas las estadísticas.
  */
 export async function extractWorldStatsFromFile(filePath) {
   const buffers = [];
+  const visitedPaths = new Set();
+
   try {
     buffers.push(await readFile(filePath));
+    visitedPaths.add(filePath.toLowerCase());
   } catch (e) {
     throw new Error(`No se pudo leer la partida: ${e.message}`);
   }
 
-  // Intentar cargar archivos complementarios en la misma carpeta (.backup o .sav.backup)
-  const candidateSiblings = [
-    filePath.replace(/\.sav$/i, ".backup"),
-    filePath.replace(/\.sav$/i, ".sav.backup"),
-    `${filePath}.backup`,
-  ];
+  const dir = dirname(filePath);
+  const rawBase = basename(filePath);
+  const cleanBase = rawBase.replace(/(\.sav|\.backup)+$/i, "");
 
-  for (const sibling of candidateSiblings) {
-    if (sibling === filePath) continue;
-    try {
-      const sibBuf = await readFile(sibling);
-      buffers.push(sibBuf);
-    } catch {}
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      const lower = entry.name.toLowerCase();
+      const isCandidate =
+        (lower.startsWith(cleanBase.toLowerCase()) || lower.includes(cleanBase.toLowerCase())) &&
+        (lower.endsWith(".sav") || lower.endsWith(".backup"));
+
+      if (isCandidate) {
+        const full = join(dir, entry.name);
+        if (!visitedPaths.has(full.toLowerCase())) {
+          visitedPaths.add(full.toLowerCase());
+          try {
+            const sibBuf = await readFile(full);
+            if (sibBuf && sibBuf.length > 0) buffers.push(sibBuf);
+          } catch {}
+        }
+      }
+    }
+  } catch {
+    // Si no se puede listar el directorio, probar candidatos directos conocidos
+    const candidates = [
+      join(dir, `${cleanBase}.sav`),
+      join(dir, `${cleanBase}.backup`),
+      join(dir, `${cleanBase}.sav.backup`),
+    ];
+    for (const c of candidates) {
+      if (!visitedPaths.has(c.toLowerCase())) {
+        visitedPaths.add(c.toLowerCase());
+        try {
+          const sibBuf = await readFile(c);
+          if (sibBuf && sibBuf.length > 0) buffers.push(sibBuf);
+        } catch {}
+      }
+    }
   }
 
-  return extractWorldStatsFromBuffers(buffers, basename(filePath));
+  return extractWorldStatsFromBuffers(buffers, cleanBase);
 }
+
 
