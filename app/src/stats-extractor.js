@@ -32,12 +32,12 @@ export function extractGameStatePlayers(buffer) {
         const len = buffer.readInt32LE(valCursor);
         if (len > 1 && len < 40 && valCursor + 4 + len - 1 <= buffer.length) {
           const name = buffer.toString("utf8", valCursor + 4, valCursor + 4 + len - 1).trim();
-          // AccountGuidSaveStr precede a CharacterName en GameState
+          // AccountGuidSaveStr precede a CharacterName en GameState (tomar la última coincidencia antes del nombre)
           const window = buffer.subarray(Math.max(0, idx - 400), idx).toString("latin1");
-          const eosMatch = window.match(/RedpointEOS:([a-f0-9]{32})/i);
-          const ps5Match = window.match(/PS5:([0-9]{15,22})/i);
-          const eosId = eosMatch ? eosMatch[1].toLowerCase() : null;
-          const ps5Id = ps5Match ? ps5Match[1] : null;
+          const eosMatches = [...window.matchAll(/RedpointEOS:([a-f0-9]{32})/gi)];
+          const ps5Matches = [...window.matchAll(/PS5:([0-9]{15,22})/gi)];
+          const eosId = eosMatches.length > 0 ? eosMatches[eosMatches.length - 1][1].toLowerCase() : null;
+          const ps5Id = ps5Matches.length > 0 ? ps5Matches[ps5Matches.length - 1][1] : null;
 
           if (name && (eosId || ps5Id)) {
             if (!players.has(name) || (!players.get(name).eosId && eosId)) {
@@ -145,12 +145,22 @@ export function extractPlayerProfiles(buffer) {
     idx += target.length;
   }
 
-  // Desduplicar perfiles priorizando el mayor SaveCount
+  // Desduplicar perfiles priorizando el mayor progreso (XP acumulada, tiempo de juego o SaveCount)
   const uniqueMap = new Map();
   for (const p of rawProfiles) {
     const name = p.meta_data?.char_name || p.char_name;
     const existing = uniqueMap.get(name);
-    if (!existing || (p.SaveCount || 0) > (existing.SaveCount || 0)) {
+    const existingXp = existing?.GameProgress?.Skills?.Skills?.reduce((a, s) => a + Number(s.Xp || 0), 0) || 0;
+    const currentXp = p.GameProgress?.Skills?.Skills?.reduce((a, s) => a + Number(s.Xp || 0), 0) || 0;
+    const currentPlaytime = Number(p.GameProgress?.Character?.Playtime_wall || 0);
+    const existingPlaytime = Number(existing?.GameProgress?.Character?.Playtime_wall || 0);
+
+    if (
+      !existing ||
+      currentXp > existingXp ||
+      (currentXp === existingXp && currentPlaytime > existingPlaytime) ||
+      (p.SaveCount || 0) > (existing.SaveCount || 0)
+    ) {
       uniqueMap.set(name, p);
     }
   }
@@ -260,6 +270,19 @@ export function calculateHighlights(players) {
     }));
 
   return {
+    topOverall: byXp.slice(0, 3).map((p, idx) => ({
+      rank: idx + 1,
+      medal: idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉",
+      roleTitle: idx === 0 ? "Campeón Supremo" : idx === 1 ? "Gran Héroe" : "Aventurero Ilustre",
+      player: p.name,
+      totalXp: p.totalXp,
+      totalLevel: p.totalLevel,
+      playtimeHours: p.playtimeHours,
+      kills: p.uniqueKillsCount,
+      structures: p.structuresBuilt,
+      guid: p.guid,
+      registeredOnly: Boolean(p.registeredOnly),
+    })),
     topXp: {
       title: "Rey de la Experiencia",
       icon: "crown",
@@ -566,12 +589,22 @@ export function extractWorldStatsFromBuffers(buffers, worldName = "Mundo") {
     }
   }
 
-  // Desduplicar perfiles priorizando el mayor SaveCount
+  // Desduplicar perfiles priorizando el mayor progreso (XP acumulada, tiempo de juego o SaveCount)
   const uniqueProfiles = new Map();
   for (const p of rawProfilesList) {
     const name = p.meta_data?.char_name || p.char_name;
     const existing = uniqueProfiles.get(name);
-    if (!existing || (p.SaveCount || 0) > (existing.SaveCount || 0)) {
+    const existingXp = existing?.GameProgress?.Skills?.Skills?.reduce((a, s) => a + Number(s.Xp || 0), 0) || 0;
+    const currentXp = p.GameProgress?.Skills?.Skills?.reduce((a, s) => a + Number(s.Xp || 0), 0) || 0;
+    const currentPlaytime = Number(p.GameProgress?.Character?.Playtime_wall || 0);
+    const existingPlaytime = Number(existing?.GameProgress?.Character?.Playtime_wall || 0);
+
+    if (
+      !existing ||
+      currentXp > existingXp ||
+      (currentXp === existingXp && currentPlaytime > existingPlaytime) ||
+      (p.SaveCount || 0) > (existing.SaveCount || 0)
+    ) {
       uniqueProfiles.set(name, p);
     }
   }
@@ -671,14 +704,13 @@ export async function extractWorldStatsFromFile(filePath) {
   const rawBase = basename(filePath);
   const cleanBase = rawBase.replace(/(\.sav|\.backup)+$/i, "");
 
+  // 1. Leer archivos hermanos en la misma carpeta (SaveGames)
   try {
     const entries = await readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isFile()) continue;
       const lower = entry.name.toLowerCase();
-      const isCandidate =
-        (lower.startsWith(cleanBase.toLowerCase()) || lower.includes(cleanBase.toLowerCase())) &&
-        (lower.endsWith(".sav") || lower.endsWith(".backup"));
+      const isCandidate = lower.endsWith(".sav") || lower.endsWith(".backup") || lower.endsWith(".lvl");
 
       if (isCandidate) {
         const full = join(dir, entry.name);
@@ -691,21 +723,21 @@ export async function extractWorldStatsFromFile(filePath) {
         }
       }
     }
-  } catch {
-    // Si no se puede listar el directorio, probar candidatos directos conocidos
-    const candidates = [
-      join(dir, `${cleanBase}.sav`),
-      join(dir, `${cleanBase}.backup`),
-      join(dir, `${cleanBase}.sav.backup`),
-    ];
-    for (const c of candidates) {
-      if (!visitedPaths.has(c.toLowerCase())) {
-        visitedPaths.add(c.toLowerCase());
-        try {
-          const sibBuf = await readFile(c);
-          if (sibBuf && sibBuf.length > 0) buffers.push(sibBuf);
-        } catch {}
-      }
+  } catch {}
+
+  // 2. Leer SpudCache/L_World.lvl si existe en rutas relativas o absolutas (contiene progreso de personajes)
+  const spudCandidates = [
+    join(dir, "..", "SpudCache", "L_World.lvl"),
+    join(dir, "SpudCache", "L_World.lvl"),
+    "/home/steam/rsdw-dedicated/RSDragonwilds/Saved/SpudCache/L_World.lvl",
+  ];
+  for (const spudFile of spudCandidates) {
+    if (!visitedPaths.has(spudFile.toLowerCase())) {
+      visitedPaths.add(spudFile.toLowerCase());
+      try {
+        const spudBuf = await readFile(spudFile);
+        if (spudBuf && spudBuf.length > 0) buffers.push(spudBuf);
+      } catch {}
     }
   }
 

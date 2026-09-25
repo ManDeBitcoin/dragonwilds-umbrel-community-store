@@ -1091,44 +1091,89 @@ function renderLeaderboard(stats) {
     liveTag.title = "Las clasificaciones se recalculan dinámicamente en tiempo real leyendo los guardados del servidor.";
   }
 
-  const podiumGrid = $("#leaderboard-podium-grid");
+  const podiumStage = $("#leaderboard-podium-stage");
+  const specialtiesGrid = $("#leaderboard-specialties-grid");
   const hl = stats.highlights || {};
-  const cards = [
-    { key: "topXp", gold: true, icon: "👑" },
-    { key: "topPlaytime", gold: true, icon: "⏳" },
-    { key: "topKills", gold: false, icon: "🗡️" },
-    { key: "topArchitect", gold: false, icon: "🏰" },
-    { key: "topExplorer", gold: false, icon: "🧭" },
-    { key: "topScholar", gold: false, icon: "📜" },
-    { key: "topTraveler", gold: false, icon: "🏃" },
-  ];
 
-  if (podiumGrid) {
-    podiumGrid.innerHTML = cards
-      .filter((c) => hl[c.key])
-      .map((c) => {
-        const item = hl[c.key];
+  // 1. Gran Podio de Honor Top 3 Visual (2º Plata, 1º Oro, 3º Bronce)
+  if (podiumStage) {
+    const topThree = hl.topOverall || (hl.topXp?.podium || []).map((r, i) => {
+      const p = stats.players.find((pl) => pl.name === r.player) || {};
+      return {
+        rank: i + 1,
+        medal: r.medal,
+        roleTitle: i === 0 ? "Campeón Supremo" : (i === 1 ? "Gran Héroe" : "Aventurero Ilustre"),
+        player: r.player,
+        totalXp: p.totalXp || r.val || 0,
+        totalLevel: p.totalLevel || 1,
+        playtimeHours: p.playtimeHours || 0,
+        kills: p.uniqueKillsCount || 0,
+        structures: p.structuresBuilt || 0,
+        registeredOnly: p.registeredOnly,
+      };
+    });
+
+    if (!topThree || topThree.length === 0) {
+      podiumStage.innerHTML = '<p class="empty">No hay suficientes aventureros para conformar el podio.</p>';
+    } else {
+      podiumStage.innerHTML = topThree.map((p) => {
+        const medal = p.medal || (p.rank === 1 ? "🥇" : (p.rank === 2 ? "🥈" : "🥉"));
+        const roleTitle = p.roleTitle || (p.rank === 1 ? "Campeón Supremo" : (p.rank === 2 ? "Gran Héroe" : "Aventurero Ilustre"));
+        const levelText = `Nivel ${p.totalLevel}`;
+        const xpText = `${(p.totalXp || 0).toLocaleString("es-ES")} XP`;
+
+        return `
+          <div class="podium-step rank-${p.rank}">
+            <div class="podium-badge-medal">${medal}</div>
+            <div class="podium-step-rank-label">${roleTitle}</div>
+            <h4 class="podium-step-name" title="${escapeHtml(p.player)}">${escapeHtml(p.player)}</h4>
+            <div class="podium-step-metric">${levelText} • ${xpText}</div>
+            <div class="podium-step-tags">
+              <span class="podium-chip">⏳ ${p.playtimeHours}h</span>
+              <span class="podium-chip">🗡️ ${p.kills} bajas</span>
+              <span class="podium-chip">🏰 ${p.structures} bases</span>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+  }
+
+  // 2. Récords por Especialidad (Grid Horizontal Compacto)
+  if (specialtiesGrid) {
+    const specialtyItems = [
+      { key: "topKills", icon: "🗡️", fallbackTitle: "Asesino de Bestias" },
+      { key: "topArchitect", icon: "🏰", fallbackTitle: "Gran Arquitecto" },
+      { key: "topPlaytime", icon: "⏳", fallbackTitle: "El Incombustible" },
+      { key: "topScholar", icon: "📜", fallbackTitle: "Erudito del Saber" },
+      { key: "topTraveler", icon: "🏃", fallbackTitle: "El Trotamundos" },
+      { key: "topExplorer", icon: "🧭", fallbackTitle: "Explorador de Santuarios" },
+    ];
+
+    specialtiesGrid.innerHTML = specialtyItems
+      .filter((s) => hl[s.key])
+      .map((s) => {
+        const item = hl[s.key];
         const runnersHtml = Array.isArray(item.podium) && item.podium.length > 1
           ? `
-            <div class="podium-runners">
+            <div class="specialty-runners">
               ${item.podium.slice(1).map((r) => `
-                <div class="podium-runner-row">
-                  <span class="runner-name">${r.medal} ${escapeHtml(r.player)}</span>
-                  <span class="runner-metric">${escapeHtml(r.metric)}</span>
-                </div>
+                <span>${r.medal} ${escapeHtml(r.player)} <b style="color: var(--text-bright);">${escapeHtml(r.metric)}</b></span>
               `).join("")}
             </div>
           `
           : "";
 
         return `
-          <div class="podium-card ${c.gold ? "gold" : ""}">
-            <div class="podium-card-header">
-              <span class="podium-card-title">${escapeHtml(item.title)}</span>
-              <span class="podium-card-icon">${c.icon}</span>
+          <div class="specialty-card">
+            <div class="specialty-card-left">
+              <span class="specialty-icon">${s.icon}</span>
+              <div class="specialty-info">
+                <p class="specialty-title">${escapeHtml(item.title || s.fallbackTitle)}</p>
+                <h4 class="specialty-champion" title="${escapeHtml(item.player)}">🥇 ${escapeHtml(item.player)}</h4>
+                <div class="specialty-metric">${escapeHtml(item.metric)}</div>
+              </div>
             </div>
-            <div class="podium-card-player" title="${escapeHtml(item.player)}">${escapeHtml(item.player)}</div>
-            <div class="podium-card-metric">${escapeHtml(item.metric)}</div>
             ${runnersHtml}
           </div>
         `;
@@ -1213,32 +1258,39 @@ function renderLeaderboard(stats) {
             </div>
           </div>
 
-          <div class="player-chips-grid">
-            <div class="stat-chip">
-              <small>Nivel RuneScape</small>
-              <strong class="amber">Niv. ${p.totalLevel}</strong>
+          ${p.registeredOnly ? `
+            <div style="background: rgba(255, 255, 255, 0.03); border: 1px dashed var(--line); border-radius: 8px; padding: 0.85rem; margin: 0.6rem 0; font-size: 0.8rem; color: var(--muted); text-align: center;">
+              <span style="font-weight: 600; color: var(--text);">Cuenta vinculada al servidor (${escapeHtml(p.platform || "Multiplataforma")})</span><br/>
+              <span class="small" style="color: #8da394;">${p.structuresBuilt > 0 ? `Ha reclamado ${p.structuresBuilt} estructura(s) o punto de reaparición en el mundo.` : "Aún no ha registrado actividad de combate o experiencia en este mundo."}</span>
             </div>
-            <div class="stat-chip">
-              <small>Experiencia Total</small>
-              <strong class="accent">${p.totalXp.toLocaleString("es-ES")} XP</strong>
+          ` : `
+            <div class="player-chips-grid">
+              <div class="stat-chip">
+                <small>Nivel RuneScape</small>
+                <strong class="amber">Niv. ${p.totalLevel}</strong>
+              </div>
+              <div class="stat-chip">
+                <small>Experiencia Total</small>
+                <strong class="accent">${p.totalXp.toLocaleString("es-ES")} XP</strong>
+              </div>
+              <div class="stat-chip">
+                <small>Jefes Derrotados</small>
+                <strong>🗡️ ${p.uniqueKillsCount} únicos</strong>
+              </div>
+              <div class="stat-chip">
+                <small>Bases y Muros</small>
+                <strong>🏰 ${p.structuresBuilt} en mapa</strong>
+              </div>
+              <div class="stat-chip">
+                <small>Santuarios</small>
+                <strong>🧭 ${p.shrinesCount} activados</strong>
+              </div>
+              <div class="stat-chip">
+                <small>Recetas y Diario</small>
+                <strong>📜 ${p.journalCount} descubiertas</strong>
+              </div>
             </div>
-            <div class="stat-chip">
-              <small>Jefes Derrotados</small>
-              <strong>🗡️ ${p.uniqueKillsCount} únicos</strong>
-            </div>
-            <div class="stat-chip">
-              <small>Bases y Muros</small>
-              <strong>🏰 ${p.structuresBuilt} en mapa</strong>
-            </div>
-            <div class="stat-chip">
-              <small>Santuarios</small>
-              <strong>🧭 ${p.shrinesCount} activados</strong>
-            </div>
-            <div class="stat-chip">
-              <small>Recetas y Diario</small>
-              <strong>📜 ${p.journalCount} descubiertas</strong>
-            </div>
-          </div>
+          `}
 
           <div class="player-card-actions">
             <button class="button tiny light copy-player-discord-btn" data-player="${escapeHtml(p.name)}" type="button">

@@ -63,6 +63,13 @@ test("calculateHighlights: determina correctamente los líderes de cada categor�
   assert.equal(hl.topArchitect.player, "Matty");
   assert.equal(hl.topExplorer.player, "ZOILA qk");
   assert.equal(hl.topScholar.player, "Bogard");
+  assert.equal(hl.topOverall.length, 3);
+  assert.equal(hl.topOverall[0].player, "Matty");
+  assert.equal(hl.topOverall[0].medal, "🥇");
+  assert.equal(hl.topOverall[1].player, "Bogard");
+  assert.equal(hl.topOverall[1].medal, "🥈");
+  assert.equal(hl.topOverall[2].player, "ZOILA qk");
+  assert.equal(hl.topOverall[2].medal, "🥉");
 });
 
 test("processPlayerProfile: procesa correctamente el perfil crudo de un jugador", () => {

@@ -234,6 +234,234 @@ dialog { width:min(430px,calc(100vw - 2rem));border:1px solid var(--line);border
 }
 
 /* Leaderboard & Dragonwilds Wrapped */
+/* Escenario del Podio de Honor (Top 3 Visual 2º - 1º - 3º) */
+.wrapped-podium-stage {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1.25rem;
+  margin: 1.25rem 0 1rem 0;
+  padding: 1.5rem 1rem 1.25rem 1rem;
+  background: radial-gradient(ellipse at center bottom, rgba(240, 174, 80, 0.08) 0%, rgba(13, 18, 14, 0.8) 70%, transparent 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+@media (max-width: 768px) {
+  .wrapped-podium-stage {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+}
+
+.podium-step {
+  flex: 1;
+  max-width: 310px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  border-radius: 12px;
+  padding: 1.25rem 1rem 1.1rem;
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s;
+}
+
+.podium-step:hover {
+  transform: translateY(-4px);
+}
+
+/* Escalón 1: Campeón Supremo (Centro, elevado, brillo dorado) */
+.podium-step.rank-1 {
+  order: 2;
+  background: linear-gradient(180deg, rgba(240, 174, 80, 0.16) 0%, #151c17 100%);
+  border: 1.5px solid #f0ae50cc;
+  box-shadow: 0 8px 32px rgba(240, 174, 80, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-14px);
+  z-index: 2;
+}
+
+.podium-step.rank-1:hover {
+  transform: translateY(-18px);
+}
+
+/* Escalón 2: Gran Héroe (Izquierda, plata) */
+.podium-step.rank-2 {
+  order: 1;
+  background: linear-gradient(180deg, rgba(203, 213, 225, 0.12) 0%, #111814 100%);
+  border: 1px solid rgba(203, 213, 225, 0.45);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* Escalón 3: Aventurero Ilustre (Derecha, bronce) */
+.podium-step.rank-3 {
+  order: 3;
+  background: linear-gradient(180deg, rgba(217, 119, 6, 0.12) 0%, #111814 100%);
+  border: 1px solid rgba(217, 119, 6, 0.45);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 768px) {
+  .podium-step.rank-1,
+  .podium-step.rank-2,
+  .podium-step.rank-3 {
+    order: unset;
+    transform: none !important;
+    max-width: 100%;
+  }
+}
+
+.podium-badge-medal {
+  font-size: 2.2rem;
+  line-height: 1;
+  margin-bottom: 0.35rem;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+}
+
+.podium-step-rank-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 0.3rem;
+}
+
+.podium-step.rank-1 .podium-step-rank-label {
+  color: var(--amber);
+}
+
+.podium-step.rank-2 .podium-step-rank-label {
+  color: #cbd5e1;
+}
+
+.podium-step.rank-3 .podium-step-rank-label {
+  color: #d97706;
+}
+
+.podium-step-name {
+  font-family: var(--font-fantasy);
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin: 0.1rem 0 0.35rem 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.podium-step.rank-1 .podium-step-name {
+  color: #fff;
+  text-shadow: 0 0 12px rgba(240, 174, 80, 0.4);
+}
+
+.podium-step-metric {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--green);
+  margin-bottom: 0.45rem;
+}
+
+.podium-step.rank-1 .podium-step-metric {
+  color: var(--amber);
+  font-size: 1.05rem;
+}
+
+.podium-step-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+
+.podium-chip {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Grid horizontal para Especialidades / Récords */
+.leaderboard-specialties-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 0.85rem;
+}
+
+.specialty-card {
+  background: #101612;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0.85rem 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.specialty-card:hover {
+  border-color: #516457;
+  background: #131c16;
+}
+
+.specialty-card-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.specialty-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.specialty-info {
+  min-width: 0;
+}
+
+.specialty-title {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0;
+}
+
+.specialty-champion {
+  font-family: var(--font-fantasy);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0.1rem 0;
+}
+
+.specialty-metric {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--green);
+  white-space: nowrap;
+}
+
+.specialty-runners {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
 .leaderboard-podium-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

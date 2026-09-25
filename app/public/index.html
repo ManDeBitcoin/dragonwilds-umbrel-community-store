@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/styles.css?v=0.1.12" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.13" />
   </head>
   <body>
     <!-- SVG Symbol Sprite Library (Lucide style) -->
@@ -446,14 +446,25 @@
             <div class="section-head">
               <div>
                 <p class="eyebrow">PODIO DE HONOR</p>
-                <h3 style="font-family: 'Cinzel', serif;">👑 Récords del Servidor</h3>
+                <h3 style="font-family: 'Cinzel', serif;">👑 Los Campeones del Servidor</h3>
+              </div>
               <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                 <span id="wrapped-live-indicator" class="status-badge online" style="font-size: 0.72rem;">● En vivo</span>
                 <span id="wrapped-world-tag" class="status-badge online">Mundo activo</span>
               </div>
             </div>
-            <div id="leaderboard-podium-grid" class="leaderboard-podium-grid">
-              <p class="empty">Cargando récords del servidor...</p>
+
+            <!-- Gran Podio de Honor (Top 3 Campeones: 2º Plata, 1º Oro, 3º Bronce) -->
+            <div id="leaderboard-podium-stage" class="wrapped-podium-stage">
+              <p class="empty">Cargando podio de campeones...</p>
+            </div>
+
+            <!-- Récords y Títulos por Especialidad (Grid Horizontal) -->
+            <div style="margin-top: 1.25rem;">
+              <h4 style="font-size: 0.8rem; font-family: 'Cinzel', serif; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 0.75rem;">
+                🏆 Distinciones y Récords por Especialidad
+              </h4>
+              <div id="leaderboard-specialties-grid" class="leaderboard-specialties-grid"></div>
             </div>
           </article>
 
