@@ -495,3 +495,32 @@ test("Runtime.gameEnvironment propaga adecuadamente STEAMAPPVALIDATE y STEAMAPPU
   assert.equal(envBoth.STEAMAPPVALIDATE, "1");
   assert.equal(envBoth.STEAMAPPUPDATE, "1");
 });
+
+test("Runtime.isGameInstalled y runSteamCmd operan correctamente en entorno mock", async () => {
+  const { Runtime } = await import("../src/runtime.js");
+  const rt = new Runtime();
+
+  const prevMock = process.env.MOCK_GAME;
+  delete process.env.MOCK_GAME;
+  const notInstalled = await rt.isGameInstalled();
+  assert.equal(notInstalled, false);
+
+  process.env.MOCK_GAME = "1";
+  try {
+    const installed = await rt.isGameInstalled();
+    assert.equal(installed, true);
+
+    const res = await rt.runSteamCmd({ update: true, validate: true });
+    assert.equal(res.code, 0);
+
+    const logs = rt.getLogs("server");
+    assert.ok(logs.some((l) => l.line.includes("Modo simulado activo")));
+  } finally {
+    if (prevMock !== undefined) {
+      process.env.MOCK_GAME = prevMock;
+    } else {
+      delete process.env.MOCK_GAME;
+    }
+  }
+});
+

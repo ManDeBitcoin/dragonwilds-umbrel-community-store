@@ -702,6 +702,122 @@ export class Runtime extends EventEmitter {
     this.addLog("vpn", "Túnel wg-vps desactivado.");
   }
 
+  async isGameInstalled() {
+    if (process.env.MOCK_GAME === "1") return true;
+    const shipping = join(SERVER_DIR, "RSDragonwilds", "Binaries", "Linux", "RSDragonwildsServer-Linux-Shipping");
+    const launch = join(SERVER_DIR, "RSDragonwildsServer.sh");
+    return (await exists(shipping)) || (await exists(launch));
+  }
+
+  async runSteamCmd(options = {}) {
+    if (process.env.MOCK_GAME === "1") {
+      this.addLog("server", "[SteamCMD] Modo simulado activo: omitiendo descarga real de SteamCMD.");
+      return { code: 0 };
+    }
+
+    const steamCmdDir = process.env.STEAMCMDDIR || "/home/steam/steamcmd";
+    const steamCmdScript = join(steamCmdDir, "steamcmd.sh");
+    if (!(await exists(steamCmdScript))) {
+      this.addLog("server", `[SteamCMD] AVISO: No se encontró ${steamCmdScript}, omitiendo paso SteamCMD.`);
+      return { code: 0 };
+    }
+
+    const appId = String(process.env.STEAMAPPID || "4019830");
+    const manifestPath = join(SERVER_DIR, "steamapps", `appmanifest_${appId}.acf`);
+    const downloadingPath = join(SERVER_DIR, "steamapps", "downloading", appId);
+
+    // Si se solicita actualizar o validar, o si el manifest previo tiene estado anómalo,
+    // limpiamos el manifest y descargas incompletas para prevenir el error de SteamCMD "state is 0x6".
+    try {
+      if (await exists(manifestPath)) {
+        let shouldCleanManifest = Boolean(options.update || options.validate);
+        if (!shouldCleanManifest) {
+          const content = await readFile(manifestPath, "utf-8").catch(() => "");
+          const match = content.match(/"StateFlags"\s*"(\d+)"/i);
+          if (match && match[1] !== "4") {
+            shouldCleanManifest = true;
+          }
+        }
+        if (shouldCleanManifest) {
+          this.addLog("server", `[SteamCMD] Limpiando manifest previo (${basename(manifestPath)}) para forzar sincronización limpia sin error 0x6.`);
+          await rm(manifestPath, { force: true }).catch(() => {});
+        }
+      }
+      if (await exists(downloadingPath)) {
+        await rm(downloadingPath, { recursive: true, force: true }).catch(() => {});
+      }
+    } catch (err) {
+      this.addLog("server", `[SteamCMD] Aviso al preparar directorio de steamapps: ${err.message}`);
+    }
+
+    const args = [
+      "+force_install_dir", SERVER_DIR,
+      "+login", "anonymous",
+      "+app_update", appId,
+    ];
+    if (options.validate || options.update) {
+      args.push("validate");
+    }
+    args.push("+quit");
+
+    this.addLog("server", `[SteamCMD] Iniciando descarga/actualización directa para App ID ${appId}...`);
+    this.addLog("panel", `Iniciando SteamCMD (App ID ${appId})...`);
+
+    return await new Promise((resolveRun, rejectRun) => {
+      const child = spawn(steamCmdScript, args, {
+        cwd: "/home/steam",
+        uid: GAME_UID,
+        gid: GAME_GID,
+        env: {
+          ...process.env,
+          HOME: "/home/steam",
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      child.stdout.on("data", (chunk) => {
+        const lines = chunk.toString().split("\n").filter(Boolean);
+        for (const line of lines) {
+          this.addLog("server", line);
+          const progressMatch = line.match(/progress:\s*([\d.]+)/i);
+          if (progressMatch) {
+            this.serverMessage = `Actualizando servidor (${progressMatch[1]}%)`;
+            this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
+          }
+        }
+      });
+
+      child.stderr.on("data", (chunk) => {
+        const lines = chunk.toString().split("\n").filter(Boolean);
+        for (const line of lines) {
+          this.addLog("server", line);
+        }
+      });
+
+      child.once("error", (err) => {
+        this.addLog("server", `[SteamCMD] Error al ejecutar proceso: ${err.message}`);
+        rejectRun(err);
+      });
+
+      child.once("close", async (code) => {
+        if (code === 0) {
+          this.addLog("server", `[SteamCMD] Actualización y verificación de App ID ${appId} completada con éxito.`);
+          this.addLog("panel", "SteamCMD completado con éxito.");
+          resolveRun({ code: 0 });
+        } else {
+          this.addLog("server", `[SteamCMD] Proceso finalizó con código de salida ${code}.`);
+          const installed = await this.isGameInstalled();
+          if (installed) {
+            this.addLog("server", "[SteamCMD] AVISO: SteamCMD reportó código no cero pero existen binarios previos. Continuando arranque.");
+            resolveRun({ code: code ?? 1 });
+          } else {
+            rejectRun(new Error(`SteamCMD falló con código ${code} y no existen binarios del juego.`));
+          }
+        }
+      });
+    });
+  }
+
   async start(options = {}) {
     if (this.child) return;
     if (!this.settings.configured) throw new Error("Completa el asistente inicial antes de arrancar.");
@@ -709,6 +825,29 @@ export class Runtime extends EventEmitter {
     this.serverState = "starting";
     this.serverMessage = options.validate ? "Validando archivos y arrancando" : (options.update ? "Actualizando y arrancando" : "Arrancando servidor");
     this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
+
+    // Descarga/actualización directa mediante SteamCMD antes de levantar WireGuard
+    const isInstalled = await this.isGameInstalled();
+    const needsSteamCmd = !isInstalled || Boolean(options.update) || Boolean(options.validate);
+
+    if (needsSteamCmd && process.env.MOCK_GAME !== "1") {
+      this.serverState = "starting";
+      this.serverMessage = options.validate ? "Validando archivos de juego..." : (options.update ? "Actualizando servidor con SteamCMD..." : "Descargando servidor con SteamCMD...");
+      this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
+      try {
+        await this.runSteamCmd({
+          update: Boolean(options.update),
+          validate: Boolean(options.validate || options.update),
+        });
+      } catch (err) {
+        this.addLog("panel", `Error en SteamCMD: ${err.message}`);
+        this.serverState = "error";
+        this.serverMessage = `Error al actualizar: ${err.message}`;
+        this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
+        throw err;
+      }
+    }
+
     await this.applyVpn();
     await mkdir(WORLD_DIR, { recursive: true });
     try {
@@ -820,6 +959,7 @@ export class Runtime extends EventEmitter {
       this.child = null;
       this.startedAt = null;
       this.onlinePlayers.clear();
+      await this.stopVpn().catch(() => {});
       this.serverState = "stopped";
       this.serverMessage = "Servidor detenido";
       this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
@@ -856,6 +996,7 @@ export class Runtime extends EventEmitter {
     this.child = null;
     this.startedAt = null;
     this.onlinePlayers.clear();
+    await this.stopVpn().catch(() => {});
     this.serverState = "stopped";
     this.serverMessage = "Servidor detenido";
     this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });

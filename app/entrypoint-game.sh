@@ -24,21 +24,44 @@ if [[ (! -f "${RSDW_SHIPPING}" && ! -x "${RSDW_LAUNCH}") || "${STEAMAPPVALIDATE}
   echo "[Dragonwilds] Descargando/actualizando servidor mediante SteamCMD (App ID ${STEAMAPPID})..."
   mkdir -p "${STEAMAPPDIR}"
 
+  manifest_file="${STEAMAPPDIR}/steamapps/appmanifest_${STEAMAPPID}.acf"
+
+  # Si el manifest está en estado corrupto (StateFlags no es 4) o si es actualización forzada,
+  # eliminarlo previene el bucle de error 'state is 0x6' en SteamCMD.
+  if [[ -f "${manifest_file}" ]]; then
+    state_flag=$(grep -i '"StateFlags"' "${manifest_file}" 2>/dev/null | tr -dc '0-9' || echo "")
+    if [[ "${state_flag}" != "4" && "${state_flag}" != "" ]] || [[ "${STEAMAPPUPDATE}" == "1" ]]; then
+      echo "[Dragonwilds] Limpiando manifest previo (${manifest_file}, flags=${state_flag}) para forzar sincronización limpia..."
+      rm -f "${manifest_file}"
+    fi
+  fi
+
+  rm -rf "${STEAMAPPDIR}/steamapps/downloading/${STEAMAPPID}" 2>/dev/null || true
+
   validate_arg=""
-  if [[ "${STEAMAPPVALIDATE}" == "1" ]]; then
+  if [[ "${STEAMAPPVALIDATE}" == "1" || "${STEAMAPPUPDATE}" == "1" ]]; then
     validate_arg="validate"
   fi
 
+  echo "[Dragonwilds] Ejecutando SteamCMD (+app_update ${STEAMAPPID} ${validate_arg})..."
   "${STEAMCMDDIR}/steamcmd.sh" \
     +force_install_dir "${STEAMAPPDIR}" \
-    +@bClientTryRequestManifestWithoutCode 1 \
     +login anonymous \
     +app_update "${STEAMAPPID}" ${validate_arg} \
     +quit || {
-      echo "[Dragonwilds] ERROR: SteamCMD finalizó con error al descargar/actualizar." >&2
-      if [[ ! -f "${RSDW_SHIPPING}" && ! -x "${RSDW_LAUNCH}" ]]; then
-        exit 1
-      fi
+      echo "[Dragonwilds] AVISO: Primer intento de SteamCMD falló. Limpiando manifest y reintentando con validación..." >&2
+      rm -f "${manifest_file}"
+      rm -rf "${STEAMAPPDIR}/steamapps/downloading/${STEAMAPPID}" 2>/dev/null || true
+      "${STEAMCMDDIR}/steamcmd.sh" \
+        +force_install_dir "${STEAMAPPDIR}" \
+        +login anonymous \
+        +app_update "${STEAMAPPID}" validate \
+        +quit || {
+          echo "[Dragonwilds] ERROR: SteamCMD finalizó con error al descargar/actualizar." >&2
+          if [[ ! -f "${RSDW_SHIPPING}" && ! -x "${RSDW_LAUNCH}" ]]; then
+            exit 1
+          fi
+        }
     }
 fi
 

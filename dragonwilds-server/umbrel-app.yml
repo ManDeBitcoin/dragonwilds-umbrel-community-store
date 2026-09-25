@@ -2,7 +2,7 @@ manifestVersion: 1
 id: dragonwilds-server
 category: networking
 name: RuneScape Dragonwilds Server
-version: "0.1.17"
+version: "0.1.18"
 tagline: Tu mundo persistente, administrado desde Umbrel
 description: >-
   Ejecuta y administra un servidor dedicado de RuneScape: Dragonwilds desde una
@@ -20,12 +20,11 @@ description: >-
   runtime arm64. El modo WireGuard necesita `/dev/net/tun` y capacidades de red
   dentro del contenedor; no se monta el socket Docker del host.
 releaseNotes: >-
-  v0.1.17: Corrección crítica contra colisiones de procesos de Unreal Engine
-  (Multiple instances of the game detected). Se implementa ejecución directa con
-  exec sobre el binario dedicado, señalización por grupo de procesos (detached)
-  y limpieza preventiva de procesos zombis en paradas y arranques. Integración
-  efectiva de actualización y validación automática vía SteamCMD al presionar
-  'Backup y actualizar'.
+  v0.1.18: Corrección del fallo de actualización de SteamCMD (Error App 4019830
+  state is 0x6). Se elimina la bandera conflictiva que bloqueaba la descarga de
+  manifiestos de Valve, se añade recuperación y limpieza automática de manifiestos
+  corruptos residuales, y se optimiza la descarga para ejecutarse por la conexión
+  directa del host a máxima velocidad antes de levantar el túnel WireGuard.
 
 
 developer: Dragonwilds Community
