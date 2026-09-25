@@ -628,9 +628,18 @@ function renderLogs(logs) {
     .filter((item) => new Date(item.at).getTime() >= app.localLogClearedAt)
     .filter((item) => app.activeLogFilter === "all" || (item.source || "").toLowerCase() === app.activeLogFilter.toLowerCase());
 
+  const emptyMessages = {
+    all: "Esperando eventos…",
+    server: "Esperando registros del servidor de juego…",
+    panel: "Esperando registros de actividad del panel…",
+    vpn: "Esperando registros de WireGuard VPN…",
+    backup: "No hay registros de copias de seguridad aún.",
+    world: "No hay eventos recientes del mundo. Los registros de streaming de celdas (LogWorldPartition), guardado de partida (LogSaveGame) y sincronización de reglas aparecerán aquí automáticamente.",
+  };
+
   $("#log-output").textContent = filtered.length
     ? filtered.map((item) => `${(item.at || "").slice(11, 19) || "--:--:--"}  [${(item.source || "server").padEnd(6)}] ${item.line}`).join("\n")
-    : "Esperando eventos…";
+    : (emptyMessages[app.activeLogFilter] || "Esperando eventos…");
   $("#log-output").scrollTop = $("#log-output").scrollHeight;
 }
 
@@ -1542,6 +1551,25 @@ $("#clear-log-view")?.addEventListener("click", () => {
   app.localLogClearedAt = Date.now();
   renderLogs(app.logs);
   toast("Vista de registros limpiada.");
+});
+
+// Enviar anuncio global (Broadcast) al servidor
+$("#broadcast-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = $("#broadcast-input");
+  const msg = input?.value?.trim();
+  if (!msg) return;
+  try {
+    toast(`Enviando anuncio global: "${msg}"…`);
+    const res = await api("/api/server/broadcast", {
+      method: "POST",
+      body: JSON.stringify({ message: msg }),
+    });
+    toast(res.message || "¡Anuncio enviado al servidor!");
+    if (input) input.value = "";
+  } catch (err) {
+    showError(err);
+  }
 });
 
 // Players modal and actions

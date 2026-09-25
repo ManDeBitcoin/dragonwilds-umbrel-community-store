@@ -407,6 +407,7 @@ export class Runtime extends EventEmitter {
     this.serverMessage = this.settings.configured
       ? "Servidor detenido (listo para arrancar)"
       : "Sin configurar";
+    this.addLog("world", `Gestor de mundos listo. Mundo activo configurado: [${this.settings.worldName || "Chavito"}]`);
   }
 
   addLog(source, line) {
@@ -433,6 +434,17 @@ export class Runtime extends EventEmitter {
     const maxCat = cat === "server" ? 2000 : 500;
     if (this.categoryLogs[cat].length > maxCat) {
       this.categoryLogs[cat].splice(0, this.categoryLogs[cat].length - maxCat);
+    }
+
+    // Espejar automáticamente eventos de mundo que emite el servidor de juego (WorldPartition, guardados, mapas)
+    const isWorldEvent = /LogWorldPartition|LogSaveGame|SaveToSlot|L_World|DominionDedicatedServer|WorldPartition|SaveGame|Bringing World/i.test(safe);
+    if (isWorldEvent && cat !== "world") {
+      const worldEntry = { at: entry.at, source: "world", line: safe.slice(0, 4000) };
+      if (!this.categoryLogs["world"]) this.categoryLogs["world"] = [];
+      this.categoryLogs["world"].push(worldEntry);
+      if (this.categoryLogs["world"].length > 500) {
+        this.categoryLogs["world"].splice(0, this.categoryLogs["world"].length - 500);
+      }
     }
 
     // Persistir eventos no-servidor para que sobrevivan reinicios
@@ -657,9 +669,10 @@ export class Runtime extends EventEmitter {
       cwd: process.env.MOCK_GAME === "1" ? process.cwd() : "/home/steam",
       uid: process.env.MOCK_GAME === "1" ? undefined : GAME_UID,
       gid: process.env.MOCK_GAME === "1" ? undefined : GAME_GID,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
     });
     this.startedAt = new Date().toISOString();
+    this.addLog("world", `Servidor arrancando con el mundo: [${this.settings.worldName || "Chavito"}]`);
     this.child.stdout.on("data", (chunk) => chunk.toString().split("\n").filter(Boolean).forEach((line) => this.addLog("server", line)));
     this.child.stderr.on("data", (chunk) => chunk.toString().split("\n").filter(Boolean).forEach((line) => this.addLog("server", line)));
     this.child.once("spawn", () => {
@@ -726,6 +739,17 @@ export class Runtime extends EventEmitter {
   async restart(options = {}) {
     await this.stop();
     await this.start(options);
+  }
+
+  sendCommand(commandText) {
+    if (!this.child || !this.child.stdin || this.serverState !== "running") {
+      throw new Error("El servidor no está en ejecución.");
+    }
+    const clean = String(commandText || "").trim();
+    if (!clean) throw new Error("El comando no puede estar vacío.");
+    this.child.stdin.write(`${clean}\n`);
+    this.addLog("server", `[CONSOLA_ADMIN] ${clean}`);
+    return true;
   }
 
   async withStoppedServer(task, restart = true) {
@@ -956,6 +980,7 @@ export class Runtime extends EventEmitter {
         this.addLog("world", `Aviso al sincronizar DedicatedServer.ini: ${err.message}`);
       }
     }
+    this.addLog("world", `Configuración de mundo sincronizada para [${worldName || this.settings.worldName || "Chavito"}] en DedicatedServer.ini`);
   }
 
   async updateWorldRules(worldName, rules) {

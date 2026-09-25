@@ -529,6 +529,22 @@
             <button class="button tiny ghost log-filter" data-filter="world">Mundo</button>
           </div>
           <article class="terminal"><div class="terminal-bar"><i></i><i></i><i></i><span>dragonwilds.log (Todos los registros)</span></div><pre id="log-output">Esperando eventos…</pre></article>
+
+          <!-- Enviar Mensaje Global / Broadcast (como en Minecraft) -->
+          <article class="panel dark-panel" style="margin-top: 1rem; padding: 1rem 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
+              <div>
+                <h4 style="margin: 0; font-size: 0.95rem; font-family: 'Cinzel', serif;">📢 Mensaje Global de Servidor (Broadcast)</h4>
+                <p class="muted small" style="margin: 0.15rem 0 0 0;">Envía un aviso o anuncio en pantalla a todos los jugadores conectados (al estilo Minecraft o comando <code>/Broadcast</code>).</p>
+              </div>
+            </div>
+            <form id="broadcast-form" style="display: flex; gap: 0.5rem;">
+              <input id="broadcast-input" type="text" placeholder="Ej: ¡El servidor se reiniciará en 10 minutos! Guarda tus objetos." style="flex: 1; padding: 0.5rem 0.75rem; border-radius: 6px; background: #0c120e; border: 1px solid var(--line); color: var(--text);" required />
+              <button class="button primary tiny" type="submit" style="white-space: nowrap;">
+                <svg class="action-svg"><use href="#icon-sword"/></svg> Enviar Anuncio
+              </button>
+            </form>
+          </article>
         </section>
 
         <section id="page-settings" class="page">

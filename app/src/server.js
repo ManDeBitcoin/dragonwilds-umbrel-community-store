@@ -503,6 +503,19 @@ async function api(req, res, url) {
     return res.end(text);
   }
 
+  if (req.method === "POST" && url.pathname === "/api/server/broadcast") {
+    if (!requireMutation(req, res)) return;
+    const body = await bodyJson(req);
+    const message = (body?.message || "").trim();
+    if (!message) return json(res, 400, { error: "El mensaje no puede estar vacío." });
+    try {
+      runtime.sendCommand(`Broadcast ${message}`);
+      return json(res, 200, { ok: true, message: `Comando enviado al servidor: Broadcast ${message}` });
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+  }
+
   return json(res, 404, { error: "Ruta API no encontrada." });
 }
 
