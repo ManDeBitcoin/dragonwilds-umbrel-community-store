@@ -131,10 +131,10 @@ function formatBytes(bytes) {
 function relativeTime(value) {
   if (!value) return "Nunca";
   const seconds = Math.max(0, (Date.now() - new Date(value).getTime()) / 1000);
-  if (seconds < 60) return "Ahora";
-  if (seconds < 3600) return `Hace ${Math.floor(seconds / 60)} min`;
-  if (seconds < 86400) return `Hace ${Math.floor(seconds / 3600)} h`;
-  return `Hace ${Math.floor(seconds / 86400)} d`;
+  if (seconds < 60) return "Hace un momento";
+  if (seconds < 3600) return `Hace ${Math.max(1, Math.floor(seconds / 60))} min`;
+  if (seconds < 86400) return `Hace ${Math.max(1, Math.floor(seconds / 3600))} h`;
+  return `Hace ${Math.max(1, Math.floor(seconds / 86400))} d`;
 }
 
 function duration(value) {
@@ -1336,9 +1336,10 @@ function renderLeaderboard(stats) {
           })
         : "Sin registro previo";
 
+      const relativeDisconn = p.lastSeen ? ` (${relativeTime(p.lastSeen).toLowerCase()})` : "";
       const lastSeenLabel = p.isOnline
         ? '<span style="color: var(--green); font-weight: 600;">● Conectado ahora</span>'
-        : `Última conexión: ${escapeHtml(lastSeenStr)}`;
+        : `Última conexión: ${escapeHtml(lastSeenStr)}${relativeDisconn}`;
 
       return `
         <article class="player-stat-card">
@@ -1396,8 +1397,8 @@ function renderLeaderboard(stats) {
             <button class="button tiny light copy-player-discord-btn" data-player="${escapeHtml(p.name)}" type="button">
               <svg class="action-svg"><use href="#icon-copy"/></svg> Copiar Ficha
             </button>
-            <button class="button tiny ghost copy-player-ai-btn" data-player="${escapeHtml(p.name)}" type="button" title="Copiar JSON crudo del personaje para prompts de IA">
-              <svg class="action-svg"><use href="#icon-sparkles"/></svg> JSON IA
+            <button class="button tiny ghost copy-player-ai-btn" data-player="${escapeHtml(p.name)}" type="button" title="Copiar JSON enriquecido del personaje para cartas, wrapped y prompts de IA">
+              <svg class="action-svg"><use href="#icon-sparkles"/></svg> Carta IA (JSON)
             </button>
           </div>
         </article>
@@ -1473,28 +1474,214 @@ function renderLeaderboard(stats) {
       const player = stats.players.find((p) => p.name === name);
       if (player) {
         try {
-          const aiPayload = {
-            aventurero: player.name,
-            estado: player.isOnline ? "En línea" : "Desconectado",
-            tiempoJugadoHoras: player.playtimeHours,
-            nivelGeneral: player.totalLevel,
-            experienciaTotal: player.totalXp,
-            jefesCazados: player.uniqueKillsCount,
-            santuariosActivados: player.shrinesCount,
-            estructurasEnMundo: player.structuresBuilt,
-            recetasDiario: player.journalCount,
-            hechizos: player.spellsCount,
-            cofresNombrados: player.namedChests,
-            datosCrudos: player.rawProfile,
-          };
+          const aiPayload = buildPlayerAiCardClient(player, stats.worldName || "Dragonwilds");
           await copyToClipboard(JSON.stringify(aiPayload, null, 2));
-          toast(`¡JSON de "${name}" copiado! Listo para tus prompts de IA.`);
+          toast(`¡Ficha de IA de "${name}" copiada! Formato enriquecido para cartas y wrapped.`);
         } catch (err) {
           showError(err);
         }
       }
     });
   });
+}
+
+function buildPlayerAiCardClient(player, worldName = "Dragonwilds") {
+  if (player.aiCard) return player.aiCard;
+
+  const cust = player.customization || {};
+  const physicalAppearance = {
+    tipo_cuerpo: cust.bodyType
+      ? `${cust.bodyType.toLowerCase().includes("female") ? "Femenino" : "Masculino"} (${cust.bodyType})`
+      : "Estándar",
+    rostro: cust.head || "Predeterminado",
+    peinado: cust.hairPreset || "Predeterminado",
+    vello_facial: cust.facialHairPreset || "Ninguno",
+    tono_piel: cust.skinTone || "Estándar",
+    color_pelo: cust.hairColor || "Natural",
+    color_ojos: cust.eyeColor || "Natural",
+    color_cejas: cust.eyebrowColor || "Natural",
+  };
+
+  const vit = player.vitals || {};
+  const vitals = {
+    salud_actual: vit.health ?? 100,
+    energia_estamina: vit.stamina ?? 100,
+    carga_especial: vit.specialCharge ?? 100,
+    nutricion_saciedad_pct: vit.sustenance ?? 100,
+    hidratacion_pct: vit.hydration ?? 100,
+    resistencia: vit.endurance ?? 0,
+    montura_equipada: vit.mount || "A pie (Sin montura)",
+    estados_activos: Array.isArray(player.activeStatusEffects)
+      ? player.activeStatusEffects.map((e) => `${e.effect}${e.value > 0 ? ` (Nivel: ${e.value})` : ""}`)
+      : [],
+  };
+
+  const loadoutItems = Array.isArray(player.equippedLoadout) ? player.equippedLoadout : [];
+  const headItem = loadoutItems.find((i) => i.slot === 0);
+  const torsoItem = loadoutItems.find((i) => i.slot === 1);
+  const legsItem = loadoutItems.find((i) => i.slot === 2);
+  const capeOrAccessoryItem = loadoutItems.find((i) => i.slot === 3 || i.slot === 4);
+  const ammoItem = loadoutItems.find((i) => i.slot === 5);
+  const quickItem = loadoutItems.find((i) => i.slot === 6);
+  const mainHandItem = loadoutItems.find((i) => i.slot === 7);
+  const offHandItem = loadoutItems.find((i) => i.slot === 8);
+
+  const formatSlot = (item) => {
+    if (!item) return null;
+    return {
+      ranura: item.slotName,
+      identificador_item: item.itemData || item.guid,
+      durabilidad_actual: item.durability,
+      mejoras_aplicadas: item.upgradesApplied,
+      encantamiento_activo: item.enchantment,
+      cantidad: item.count || 1,
+    };
+  };
+
+  const equipmentAndWeapons = {
+    armadura: {
+      cabeza_yelmo: formatSlot(headItem),
+      torso_pechera: formatSlot(torsoItem),
+      piernas_grebas: formatSlot(legsItem),
+      capa_accesorio: formatSlot(capeOrAccessoryItem),
+    },
+    armas_y_herramientas: {
+      mano_diestra_arma_principal: formatSlot(mainHandItem),
+      mano_siniestra_escudo_secundaria: formatSlot(offHandItem),
+      municion_proyectiles: formatSlot(ammoItem),
+      acceso_rapido_consumibles: formatSlot(quickItem),
+    },
+    resumen_carga: {
+      piezas_equipadas: loadoutItems.length,
+      ranuras_inventario_ocupadas: player.inventorySlotsOccupied || 0,
+      detalles_completos_loadout: loadoutItems.map((i) => ({
+        ranura: i.slotName,
+        item: i.itemData || i.guid,
+        durabilidad: i.durability,
+        cantidad: i.count,
+        encantamiento: i.enchantment,
+      })),
+    },
+  };
+
+  const magic = {
+    hechizos_equipados_en_barra: Array.isArray(player.equippedSpells) ? player.equippedSpells : [],
+    total_hechizos_equipados: Array.isArray(player.equippedSpells) ? player.equippedSpells.length : 0,
+    total_hechizos_desbloqueados: player.spellsCount || 0,
+    libro_hechizos: Array.isArray(player.spellsUnlocked) ? player.spellsUnlocked : [],
+    enfriamientos_magia_utilidad: Array.isArray(player.utilityCooldowns) ? player.utilityCooldowns : [],
+  };
+
+  const coords = player.coordinates;
+  const location = {
+    posicion_mundo: player.lastLocation
+      ? String(player.lastLocation)
+      : coords
+        ? `X: ${coords.x}, Y: ${coords.y}, Z: ${coords.z}`
+        : "Desconocida",
+    coordenadas: coords ? { x: coords.x, y: coords.y, z: coords.z } : null,
+    distancia_recorrida_metros: player.walkedDistanceMeters || 0,
+    distancia_recorrida_km: Number(((player.walkedDistanceMeters || 0) / 1000).toFixed(2)),
+    zonas_y_hitos_descubiertos: Array.isArray(player.discoveredLocations) ? player.discoveredLocations : [],
+  };
+
+  const topSkill = (player.skills || []).reduce(
+    (max, s) => ((s.xp || 0) > (max?.xp || 0) ? s : max),
+    null
+  );
+
+  const progression = {
+    nivel_total: player.totalLevel,
+    experiencia_total_xp: player.totalXp,
+    habilidades: (player.skills || []).map((s) => ({
+      id: s.id,
+      nivel: s.level,
+      xp: s.xp,
+    })),
+    habilidad_predominante: topSkill ? { id: topSkill.id, nivel: topSkill.level, xp: topSkill.xp } : null,
+  };
+
+  let clasePrincipal = "Aventurero Errante";
+  let estiloCombate = "Equilibrado";
+  let especialidad = "Exploración de Gielinor";
+
+  if ((player.spellsCount || 0) >= 5 || magic.total_hechizos_equipados >= 3) {
+    clasePrincipal = "Archimago de Gielinor";
+    estiloCombate = "Magia elemental y sortilegios rúnicos a distancia";
+    especialidad = "Dominio de las runas arcanas y libros de hechizos";
+  } else if ((player.uniqueKillsCount || 0) >= 15) {
+    clasePrincipal = "Cazador Supremo (Slayer Master)";
+    estiloCombate = "Combate cuerpo a cuerpo y cacería de monstruos mayores";
+    especialidad = "Exterminio de bestias colosales y jefes de mazmorra";
+  } else if ((player.structuresBuilt || 0) >= 20) {
+    clasePrincipal = "Gran Ingeniero de Bastiones";
+    estiloCombate = "Defensa táctica y fortificación de territorio";
+    especialidad = "Arquitectura, manufactura y forja de campamentos";
+  } else if ((player.shrinesCount || 0) >= 4 || (player.walkedDistanceMeters || 0) >= 30000) {
+    clasePrincipal = "Peregrino de los Santuarios";
+    estiloCombate = "Supervivencia ágil y movilidad continua";
+    especialidad = "Comunión con los santuarios sagrados y cartografía de tierras salvajes";
+  }
+
+  const archetype = {
+    clase_principal: clasePrincipal,
+    estilo_combate: estiloCombate,
+    especialidad: especialidad,
+    titulo_honorifico: player.titleBadge?.title || "Aventurero de RuneScape",
+    distinciones: player.titleBadge?.tags || [],
+  };
+
+  const feats = {
+    jefes_y_bestias_cazadas: player.uniqueKillsCount || 0,
+    bestiario_slayer: Array.isArray(player.uniqueKills) ? player.uniqueKills : [],
+    santuarios_sagrados_activados: player.shrinesCount || 0,
+    lista_santuarios: Array.isArray(player.shrinesUnlocked) ? player.shrinesUnlocked : [],
+    recetas_y_entradas_diario: player.journalCount || 0,
+    estructuras_construidas_en_mundo: player.structuresBuilt || 0,
+    cofres_bautizados: Array.isArray(player.namedChests) ? player.namedChests : [],
+    misiones_en_progreso: Array.isArray(player.activeQuests) ? player.activeQuests : [],
+  };
+
+  const gearDesc = [];
+  if (headItem) gearDesc.push("yelmo forjado");
+  if (torsoItem) gearDesc.push("coraza de combate reforzada");
+  if (legsItem) gearDesc.push("grebas de batalla");
+  if (mainHandItem) gearDesc.push("arma en mano diestra" + (mainHandItem.enchantment ? " imbuida en magia arcana" : ""));
+  if (offHandItem) gearDesc.push("escudo o artefacto en mano siniestra");
+  const gearText = gearDesc.length > 0 ? gearDesc.join(", ") : "atuendo ligero de explorador";
+
+  const locText = coords
+    ? `en las coordenadas X: ${Math.round(coords.x)}, Y: ${Math.round(coords.y)}`
+    : location.zonas_y_hitos_descubiertos[0]
+      ? `en las inmediaciones de ${location.zonas_y_hitos_descubiertos[0]}`
+      : "en las tierras salvajes de Gielinor";
+
+  const promptNarrativo =
+    `Retrato cinematográfico de fantasía de ${player.name}, ${clasePrincipal} en el reino de ${worldName}. ` +
+    `Nivel total ${player.totalLevel} con ${player.totalXp.toLocaleString("es-ES")} XP acumulada. ` +
+    `Porta ${gearText}. ` +
+    `Ha dominado ${magic.total_hechizos_desbloqueados} hechizos y vencido a ${feats.jefes_y_bestias_cazadas} bestias míticas. ` +
+    `Última posición registrada ${locText}. ` +
+    `Estilo arte conceptual épico, ambientación RuneScape Dragonwilds, iluminación volumétrica y máximo detalle de render.`;
+
+  return {
+    aventurero: player.name,
+    reino_o_mundo: worldName,
+    modo_juego: player.isHardcore ? "Hardcore (Ironman)" : "Normal",
+    tiempo_jugado_horas: player.playtimeHours,
+    horas_totales_exactas: Number((player.playtimeSeconds / 3600).toFixed(2)),
+    plataforma: player.platform || "PC / Steam",
+    arquetipo: archetype,
+    apariencia_fisica: physicalAppearance,
+    atributos_vitales: vitals,
+    equipamiento_y_armamento: equipmentAndWeapons,
+    magia_y_hechizos: magic,
+    ubicacion_en_gielinor: location,
+    progresion_runescape: progression,
+    hazañas_y_legado: feats,
+    descripcion_narrativa_para_ia: promptNarrativo,
+    datos_tecnicos_crudos: player.rawProfile || null,
+  };
 }
 
 

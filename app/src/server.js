@@ -23,7 +23,7 @@ const runtime = new Runtime();
 const sessions = new Map();
 const loginAttempts = new Map();
 let localAuth = null;
-const APP_VERSION = "0.1.15";
+const APP_VERSION = "0.1.16";
 const BUILD_ID = `${APP_VERSION}-${Date.now().toString(36)}`;
 
 const mimeTypes = {

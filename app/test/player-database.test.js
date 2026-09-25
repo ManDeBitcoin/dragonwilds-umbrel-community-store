@@ -253,3 +253,63 @@ test("extractWorldStatsFromFile con PlayerDatabase: recupera datos reales de par
 
   await rm(tempDir, { recursive: true, force: true });
 });
+
+test("PlayerDatabase: jugadores desconectados (incluyendo con 0 XP como ObiwanPenobi__) NUNCA actualizan lastSeen a la fecha actual al refrescar", async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), "rsdw-db-lastseen-"));
+  const dbFile = join(tempDir, "player-database.json");
+  const db = new PlayerDatabase(dbFile);
+
+  const historicalTime = "2026-09-20T18:36:27.000Z";
+  db.getWorldData("Chavito").players["ObiwanPenobi__"] = {
+    name: "ObiwanPenobi__",
+    guid: "0002d71d75c244468d4a7438ac03da03",
+    platform: "PC / Epic",
+    totalXp: 0,
+    totalLevel: 1,
+    playtimeSeconds: 1680,
+    playtimeHours: 0.5,
+    firstSeen: "2026-09-20T18:08:28.000Z",
+    lastSeen: historicalTime,
+    isOnline: false,
+    registeredOnly: false,
+  };
+
+  db.getWorldData("Chavito").actionLog = [
+    {
+      id: "act-5",
+      timestamp: historicalTime,
+      player: "ObiwanPenobi__",
+      action: "Se desconectó del servidor tras sesión de exploración",
+      type: "disconnection",
+    },
+  ];
+
+  // Primer escaneo donde el jugador aparece como registeredOnly en el .sav
+  const freshScan1 = [
+    {
+      name: "ObiwanPenobi__",
+      guid: "0002d71d75c244468d4a7438ac03da03",
+      platform: "PC / Epic",
+      totalXp: 0,
+      totalLevel: 1,
+      registeredOnly: true,
+    },
+  ];
+
+  const res1 = await db.mergeWorldStats("Chavito", freshScan1, new Set());
+  const obi1 = res1.players.find((p) => p.name === "ObiwanPenobi__");
+  assert.equal(obi1.lastSeen, historicalTime, "La primera sincronización debe conservar la fecha histórica");
+  assert.equal(obi1.isOnline, false);
+  assert.equal(obi1.playtimeHours, 0.5, "Debe preservar el tiempo jugado");
+
+  // Esperar un momento y simular un segundo escaneo (refresh del usuario)
+  await new Promise((r) => setTimeout(r, 50));
+
+  const res2 = await db.mergeWorldStats("Chavito", freshScan1, new Set());
+  const obi2 = res2.players.find((p) => p.name === "ObiwanPenobi__");
+  assert.equal(obi2.lastSeen, historicalTime, "Un refresco o reescaneo jamás debe cambiar lastSeen a la fecha actual");
+  assert.equal(obi2.isOnline, false);
+
+  await rm(tempDir, { recursive: true, force: true });
+});
+

@@ -210,6 +210,132 @@ export function processPlayerProfile(raw, worldStructures = {}) {
   const inventorySlotsOccupied = Object.keys(inv).filter((k) => !isNaN(k)).length;
   const loadoutSlotsOccupied = Object.keys(loadout).filter((k) => !isNaN(k)).length;
 
+  // Personalización estética y física del personaje (Unreal Engine CustomizationData)
+  const custData = raw.Customization?.CustomizationData || {};
+  const customization = {
+    bodyType: custData.BodyType?.rowName || null,
+    head: custData.Head?.rowName || null,
+    hairPreset: custData.HairPreset?.rowName || null,
+    facialHairPreset: custData.FacialHairPreset?.rowName || null,
+    skinTone: custData.SkinTone?.rowName || null,
+    hairColor: custData.HairColor?.rowName || null,
+    eyeColor: custData.EyeColor?.rowName || null,
+    eyebrowColor: custData.EyebrowColor?.rowName || null,
+  };
+
+  // Atributos vitales y condición física
+  const vitals = {
+    health: Number(char.Health?.CurrentValue ?? 100),
+    stamina: Number(char.Stamina?.CurrentValue ?? 100),
+    specialCharge: Number(char.SpecialCharge?.CurrentValue ?? 100),
+    sustenance: Math.round(Number(char.Sustenance?.SustenanceValue ?? 100)),
+    hydration: Math.round(Number(char.Hydration?.HydrationValue ?? 100)),
+    endurance: Number(char.Endurance?.EnduranceValue ?? 0),
+    mount: (char.Mount?.MountEquipped && char.Mount.MountEquipped !== "None") ? char.Mount.MountEquipped : null,
+  };
+
+  // Efectos de estado activos (Cosiness, Cold, Poison, Well Rested, etc.)
+  const activeStatusEffects = [];
+  if (char.StatusEffects && typeof char.StatusEffects === "object") {
+    for (const [effectName, effectData] of Object.entries(char.StatusEffects)) {
+      if (!effectData || typeof effectData !== "object") continue;
+      const isActive = Array.isArray(effectData.Thresholds) && effectData.Thresholds.some((t) => t.Active);
+      const val = Number(effectData.Value || 0);
+      if (isActive || val > 0) {
+        activeStatusEffects.push({
+          effect: effectName,
+          value: val,
+          active: isActive,
+        });
+      }
+    }
+  }
+
+  // Coordenadas espaciales exactas en el mapa de Gielinor
+  const rawPos = char.LastAccessibleLocation?.Position || "";
+  let coordinates = null;
+  if (typeof rawPos === "string") {
+    const posMatch = rawPos.match(/X=([-\d.]+),\s*Y=([-\d.]+),\s*Z=([-\d.]+)/);
+    if (posMatch) {
+      coordinates = {
+        x: parseFloat(posMatch[1]),
+        y: parseFloat(posMatch[2]),
+        z: parseFloat(posMatch[3]),
+      };
+    }
+  }
+
+  // Resolución y mapeo del equipamiento y armamento (Loadout & Inventory)
+  const slotLabels = {
+    0: "Cabeza (Casco / Yelmo)",
+    1: "Torso (Pechera / Coraza)",
+    2: "Piernas (Grebas / Pantalones)",
+    3: "Accesorio / Capa / Botas",
+    4: "Accesorio / Cinturón",
+    5: "Munición (Proyectiles / Flechas)",
+    6: "Acceso Rápido (Consumible)",
+    7: "Mano Diestra (Arma Principal)",
+    8: "Mano Siniestra (Escudo / Herramienta)",
+  };
+
+  const equippedLoadout = [];
+  for (const [slotKey, slotVal] of Object.entries(loadout)) {
+    if (slotKey === "MaxSlotIndex" || isNaN(slotKey)) continue;
+    const slotIdx = Number(slotKey);
+    let itemObj = slotVal;
+    let fromInventory = false;
+    let inventoryIndex = null;
+
+    if (slotVal && slotVal.PlayerInventoryItemIndex !== undefined) {
+      inventoryIndex = slotVal.PlayerInventoryItemIndex;
+      itemObj = inv[inventoryIndex] || slotVal;
+      fromInventory = true;
+    }
+
+    if (itemObj && (itemObj.GUID || itemObj.ItemData)) {
+      equippedLoadout.push({
+        slot: slotIdx,
+        slotName: slotLabels[slotIdx] || `Ranura ${slotIdx}`,
+        itemData: itemObj.ItemData || null,
+        guid: itemObj.GUID || null,
+        count: itemObj.Count || 1,
+        durability: itemObj.Durability !== undefined ? Number(itemObj.Durability) : null,
+        upgradesApplied: itemObj.NumUpgradesApplied !== undefined ? Number(itemObj.NumUpgradesApplied) : 0,
+        enchantment: itemObj.MagicalHeldEquipmentEffect?.ID || null,
+        fromInventory,
+        inventoryIndex,
+      });
+    }
+  }
+
+  // Hechizos seleccionados en la barra de acción rápida
+  const equippedSpells = Array.isArray(gp.Spellcasting?.SelectedSpells)
+    ? gp.Spellcasting.SelectedSpells.filter((s) => typeof s === "string" && s.trim().length > 0)
+    : [];
+
+  // Enfriamientos activos de magia de utilidad
+  const utilityCooldowns = Array.isArray(char.UtilityMagic?.Cooldowns)
+    ? char.UtilityMagic.Cooldowns.map((c) => ({ spell: c.Spell, timeElapsed: c.TimeElapsed }))
+    : [];
+
+  // Puntos de interés y zonas exploradas en misiones
+  const discoveredLocations = Array.isArray(gp.QuestProgress?.QuestLocations)
+    ? gp.QuestProgress.QuestLocations
+        .filter((l) => l.QuestLocationsState === true)
+        .map((l) => l.QuestLocationId)
+    : [];
+
+  // Misiones activas en curso
+  const activeQuests = Array.isArray(gp.QuestProgress?.Quests)
+    ? gp.QuestProgress.Quests
+        .filter((q) => q.QuestObjective && q.QuestObjective !== "None")
+        .map((q) => ({
+          questId: q.QuestId,
+          state: q.QuestState === 2 ? "Completada" : q.QuestState === 1 ? "En progreso" : "Iniciada",
+          objective: q.QuestObjective,
+        }))
+    : [];
+
   return {
     name,
     guid,
@@ -233,6 +359,15 @@ export function processPlayerProfile(raw, worldStructures = {}) {
     namedChests: structuresInfo.namedChests,
     walkedDistanceMeters: char.WalkedDistanceSinceXp || 0,
     lastLocation: char.LastAccessibleLocation?.Position || "",
+    coordinates,
+    customization,
+    vitals,
+    activeStatusEffects,
+    equippedLoadout,
+    equippedSpells,
+    utilityCooldowns,
+    discoveredLocations,
+    activeQuests,
     inventorySlotsOccupied,
     loadoutSlotsOccupied,
     rawProfile: raw,
@@ -558,6 +693,219 @@ export function generatePlayerDiscordCard(player, worldName = "Dragonwilds") {
 }
 
 /**
+ * Genera la estructura JSON de la carta de personaje enriquecida ("Wrapped / Reconstrucción IA").
+ * Excluye deliberadamente el estado de conexión volátil (online/offline) y profundiza en
+ * la apariencia física, armadura, armas, hechizos, posición en el mapa y atributos vitales.
+ */
+export function buildPlayerAiCard(player, worldName = "Dragonwilds") {
+  if (!player) return null;
+
+  // Rasgos físicos y estética (CustomizationData)
+  const cust = player.customization || {};
+  const physicalAppearance = {
+    tipo_cuerpo: cust.bodyType
+      ? `${cust.bodyType.toLowerCase().includes("female") ? "Femenino" : "Masculino"} (${cust.bodyType})`
+      : "Estándar",
+    rostro: cust.head || "Predeterminado",
+    peinado: cust.hairPreset || "Predeterminado",
+    vello_facial: cust.facialHairPreset || "Ninguno",
+    tono_piel: cust.skinTone || "Estándar",
+    color_pelo: cust.hairColor || "Natural",
+    color_ojos: cust.eyeColor || "Natural",
+    color_cejas: cust.eyebrowColor || "Natural",
+  };
+
+  // Atributos vitales y condición
+  const vit = player.vitals || {};
+  const vitals = {
+    salud_actual: vit.health ?? 100,
+    energia_estamina: vit.stamina ?? 100,
+    carga_especial: vit.specialCharge ?? 100,
+    nutricion_saciedad_pct: vit.sustenance ?? 100,
+    hidratacion_pct: vit.hydration ?? 100,
+    resistencia: vit.endurance ?? 0,
+    montura_equipada: vit.mount || "A pie (Sin montura)",
+    estados_activos: Array.isArray(player.activeStatusEffects)
+      ? player.activeStatusEffects.map((e) => `${e.effect}${e.value > 0 ? ` (Nivel: ${e.value})` : ""}`)
+      : [],
+  };
+
+  // Equipamiento y armamento resuelto (Loadout & Inventory)
+  const loadoutItems = Array.isArray(player.equippedLoadout) ? player.equippedLoadout : [];
+  const headItem = loadoutItems.find((i) => i.slot === 0);
+  const torsoItem = loadoutItems.find((i) => i.slot === 1);
+  const legsItem = loadoutItems.find((i) => i.slot === 2);
+  const capeOrAccessoryItem = loadoutItems.find((i) => i.slot === 3 || i.slot === 4);
+  const ammoItem = loadoutItems.find((i) => i.slot === 5);
+  const quickItem = loadoutItems.find((i) => i.slot === 6);
+  const mainHandItem = loadoutItems.find((i) => i.slot === 7);
+  const offHandItem = loadoutItems.find((i) => i.slot === 8);
+
+  const formatSlot = (item) => {
+    if (!item) return null;
+    return {
+      ranura: item.slotName,
+      identificador_item: item.itemData || item.guid,
+      durabilidad_actual: item.durability,
+      mejoras_aplicadas: item.upgradesApplied,
+      encantamiento_activo: item.enchantment,
+      cantidad: item.count || 1,
+    };
+  };
+
+  const equipmentAndWeapons = {
+    armadura: {
+      cabeza_yelmo: formatSlot(headItem),
+      torso_pechera: formatSlot(torsoItem),
+      piernas_grebas: formatSlot(legsItem),
+      capa_accesorio: formatSlot(capeOrAccessoryItem),
+    },
+    armas_y_herramientas: {
+      mano_diestra_arma_principal: formatSlot(mainHandItem),
+      mano_siniestra_escudo_secundaria: formatSlot(offHandItem),
+      municion_proyectiles: formatSlot(ammoItem),
+      acceso_rapido_consumibles: formatSlot(quickItem),
+    },
+    resumen_carga: {
+      piezas_equipadas: loadoutItems.length,
+      ranuras_inventario_ocupadas: player.inventorySlotsOccupied || 0,
+      detalles_completos_loadout: loadoutItems.map((i) => ({
+        ranura: i.slotName,
+        item: i.itemData || i.guid,
+        durabilidad: i.durability,
+        cantidad: i.count,
+        encantamiento: i.enchantment,
+      })),
+    },
+  };
+
+  // Magia y Hechizos
+  const magic = {
+    hechizos_equipados_en_barra: Array.isArray(player.equippedSpells) ? player.equippedSpells : [],
+    total_hechizos_equipados: Array.isArray(player.equippedSpells) ? player.equippedSpells.length : 0,
+    total_hechizos_desbloqueados: player.spellsCount || 0,
+    libro_hechizos: Array.isArray(player.spellsUnlocked) ? player.spellsUnlocked : [],
+    enfriamientos_magia_utilidad: Array.isArray(player.utilityCooldowns) ? player.utilityCooldowns : [],
+  };
+
+  // Ubicación y Exploración en Gielinor
+  const coords = player.coordinates;
+  const location = {
+    posicion_mundo: player.lastLocation
+      ? String(player.lastLocation)
+      : coords
+        ? `X: ${coords.x}, Y: ${coords.y}, Z: ${coords.z}`
+        : "Desconocida",
+    coordenadas: coords ? { x: coords.x, y: coords.y, z: coords.z } : null,
+    distancia_recorrida_metros: player.walkedDistanceMeters || 0,
+    distancia_recorrida_km: Number(((player.walkedDistanceMeters || 0) / 1000).toFixed(2)),
+    zonas_y_hitos_descubiertos: Array.isArray(player.discoveredLocations) ? player.discoveredLocations : [],
+  };
+
+  // Progresión general de RuneScape
+  const topSkill = (player.skills || []).reduce(
+    (max, s) => ((s.xp || 0) > (max?.xp || 0) ? s : max),
+    null
+  );
+
+  const progression = {
+    nivel_total: player.totalLevel,
+    experiencia_total_xp: player.totalXp,
+    habilidades: (player.skills || []).map((s) => ({
+      id: s.id,
+      nivel: s.level,
+      xp: s.xp,
+    })),
+    habilidad_predominante: topSkill ? { id: topSkill.id, nivel: topSkill.level, xp: topSkill.xp } : null,
+  };
+
+  // Arquetipo de Rol
+  let clasePrincipal = "Aventurero Errante";
+  let estiloCombate = "Equilibrado";
+  let especialidad = "Exploración de Gielinor";
+
+  if ((player.spellsCount || 0) >= 5 || magic.total_hechizos_equipados >= 3) {
+    clasePrincipal = "Archimago de Gielinor";
+    estiloCombate = "Magia elemental y sortilegios rúnicos a distancia";
+    especialidad = "Dominio de las runas arcanas y libros de hechizos";
+  } else if ((player.uniqueKillsCount || 0) >= 15) {
+    clasePrincipal = "Cazador Supremo (Slayer Master)";
+    estiloCombate = "Combate cuerpo a cuerpo y cacería de monstruos mayores";
+    especialidad = "Exterminio de bestias colosales y jefes de mazmorra";
+  } else if ((player.structuresBuilt || 0) >= 20) {
+    clasePrincipal = "Gran Ingeniero de Bastiones";
+    estiloCombate = "Defensa táctica y fortificación de territorio";
+    especialidad = "Arquitectura, manufactura y forja de campamentos";
+  } else if ((player.shrinesCount || 0) >= 4 || (player.walkedDistanceMeters || 0) >= 30000) {
+    clasePrincipal = "Peregrino de los Santuarios";
+    estiloCombate = "Supervivencia ágil y movilidad continua";
+    especialidad = "Comunión con los santuarios sagrados y cartografía de tierras salvajes";
+  }
+
+  const archetype = {
+    clase_principal: clasePrincipal,
+    estilo_combate: estiloCombate,
+    especialidad: especialidad,
+    titulo_honorifico: player.titleBadge?.title || "Aventurero de RuneScape",
+    distinciones: player.titleBadge?.tags || [],
+  };
+
+  // Hazañas y Legado
+  const feats = {
+    jefes_y_bestias_cazadas: player.uniqueKillsCount || 0,
+    bestiario_slayer: Array.isArray(player.uniqueKills) ? player.uniqueKills : [],
+    santuarios_sagrados_activados: player.shrinesCount || 0,
+    lista_santuarios: Array.isArray(player.shrinesUnlocked) ? player.shrinesUnlocked : [],
+    recetas_y_entradas_diario: player.journalCount || 0,
+    estructuras_construidas_en_mundo: player.structuresBuilt || 0,
+    cofres_bautizados: Array.isArray(player.namedChests) ? player.namedChests : [],
+    misiones_en_progreso: Array.isArray(player.activeQuests) ? player.activeQuests : [],
+  };
+
+  // Descripción narrativa / Prompt para IA
+  const gearDesc = [];
+  if (headItem) gearDesc.push("yelmo forjado");
+  if (torsoItem) gearDesc.push("coraza de combate reforzada");
+  if (legsItem) gearDesc.push("grebas de batalla");
+  if (mainHandItem) gearDesc.push("arma en mano diestra" + (mainHandItem.enchantment ? " imbuida en magia arcana" : ""));
+  if (offHandItem) gearDesc.push("escudo o artefacto en mano siniestra");
+  const gearText = gearDesc.length > 0 ? gearDesc.join(", ") : "atuendo ligero de explorador";
+
+  const locText = coords
+    ? `en las coordenadas X: ${Math.round(coords.x)}, Y: ${Math.round(coords.y)}`
+    : location.zonas_y_hitos_descubiertos[0]
+      ? `en las inmediaciones de ${location.zonas_y_hitos_descubiertos[0]}`
+      : "en las tierras salvajes de Gielinor";
+
+  const promptNarrativo =
+    `Retrato cinematográfico de fantasía de ${player.name}, ${clasePrincipal} en el reino de ${worldName}. ` +
+    `Nivel total ${player.totalLevel} con ${player.totalXp.toLocaleString("es-ES")} XP acumulada. ` +
+    `Porta ${gearText}. ` +
+    `Ha dominado ${magic.total_hechizos_desbloqueados} hechizos y vencido a ${feats.jefes_y_bestias_cazadas} bestias míticas. ` +
+    `Última posición registrada ${locText}. ` +
+    `Estilo arte conceptual épico, ambientación RuneScape Dragonwilds, iluminación volumétrica y máximo detalle de render.`;
+
+  return {
+    aventurero: player.name,
+    reino_o_mundo: worldName,
+    modo_juego: player.isHardcore ? "Hardcore (Ironman)" : "Normal",
+    tiempo_jugado_horas: player.playtimeHours,
+    horas_totales_exactas: Number((player.playtimeSeconds / 3600).toFixed(2)),
+    plataforma: player.platform || "PC / Steam",
+    arquetipo: archetype,
+    apariencia_fisica: physicalAppearance,
+    atributos_vitales: vitals,
+    equipamiento_y_armamento: equipmentAndWeapons,
+    magia_y_hechizos: magic,
+    ubicacion_en_gielinor: location,
+    progresion_runescape: progression,
+    hazañas_y_legado: feats,
+    descripcion_narrativa_para_ia: promptNarrativo,
+    datos_tecnicos_crudos: player.rawProfile || null,
+  };
+}
+
+/**
  * Función principal para extraer estadísticas completas desde uno o varios buffers de guardado.
  */
 export function extractWorldStatsFromBuffers(buffers, worldName = "Mundo") {
@@ -668,10 +1016,11 @@ export function extractWorldStatsFromBuffers(buffers, worldName = "Mundo") {
 
   const highlights = calculateHighlights(players);
 
-  // Asignar título honorífico y tarjeta de Discord a cada aventurero
+  // Asignar título honorífico, tarjeta de Discord y ficha enriquecida para IA
   for (const p of players) {
     p.titleBadge = assignPlayerHonorificTitle(p, highlights);
     p.discordCard = generatePlayerDiscordCard(p, cleanWorldName);
+    p.aiCard = buildPlayerAiCard(p, cleanWorldName);
   }
 
   return {
@@ -763,6 +1112,7 @@ export async function extractWorldStatsFromFile(filePath, options = {}) {
     for (const p of mergedPlayers) {
       p.titleBadge = assignPlayerHonorificTitle(p, highlights);
       p.discordCard = generatePlayerDiscordCard(p, cleanBase);
+      p.aiCard = buildPlayerAiCard(p, cleanBase);
     }
 
     stats = {

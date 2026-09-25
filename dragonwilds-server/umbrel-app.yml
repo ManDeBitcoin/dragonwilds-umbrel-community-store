@@ -2,7 +2,7 @@ manifestVersion: 1
 id: dragonwilds-server
 category: networking
 name: RuneScape Dragonwilds Server
-version: "0.1.15"
+version: "0.1.16"
 tagline: Tu mundo persistente, administrado desde Umbrel
 description: >-
   Ejecuta y administra un servidor dedicado de RuneScape: Dragonwilds desde una
@@ -20,11 +20,12 @@ description: >-
   runtime arm64. El modo WireGuard necesita `/dev/net/tun` y capacidades de red
   dentro del contenedor; no se monta el socket Docker del host.
 releaseNotes: >-
-  v0.1.15: Base de datos persistente para jugadores con registro deduplicado de
-  progresión e hitos, garantizando que los aventureros desconectados conserven
-  sus estadísticas completas y fecha de última conexión en lugar de reiniciarse
-  a cero. Corrección del error de copiado al portapapeles (resumen Discord, fichas
-  y JSON para IA) en entornos HTTP locales de Umbrel.
+  v0.1.16: Enriquecimiento profundo del formato JSON para reconstrucción de
+  personajes en cartas IA (wrapped), resolviendo armaduras, armas con
+  encantamientos mágicos, grimorio de hechizos, atributos vitales, estética física
+  y coordenadas espaciales en Gielinor sin estado volátil de conexión. Corrección
+  definitiva del registro de última desconexión para evitar marcas erróneas en
+  jugadores desconectados.
 
 
 developer: Dragonwilds Community

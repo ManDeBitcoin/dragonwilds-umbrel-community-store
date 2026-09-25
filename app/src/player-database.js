@@ -128,6 +128,34 @@ export class PlayerDatabase {
       Array.from(onlineUserNames || []).map((n) => String(n).toLowerCase())
     );
 
+/**
+ * Determina la marca de tiempo de última conexión/desconexión de forma verídica y consistente.
+ * Si el jugador está desconectado, jamás debe asignarse 'now' ni actualizarse en cada escaneo,
+ * y se recupera la desconexión histórica registrada en el registro de acciones si está disponible.
+ */
+function getAccurateLastSeen(worldData, lowerName, existing, isOnline) {
+  if (isOnline) {
+    return new Date().toISOString();
+  }
+
+  const actions = worldData?.actionLog || [];
+  const lastDisconn = [...actions].reverse().find(
+    (a) => a.player && a.player.toLowerCase() === lowerName && a.type === "disconnection" && a.timestamp
+  );
+
+  if (lastDisconn && lastDisconn.timestamp) {
+    const hasLaterConnection = actions.some(
+      (a) => a.player && a.player.toLowerCase() === lowerName && a.type === "connection" && a.timestamp > lastDisconn.timestamp
+    );
+
+    if (!hasLaterConnection) {
+      return lastDisconn.timestamp;
+    }
+  }
+
+  return existing?.lastSeen || lastDisconn?.timestamp || existing?.firstSeen || null;
+}
+
     for (const fresh of freshPlayers) {
       const name = fresh.name;
       const lowerName = name.toLowerCase();
@@ -135,28 +163,36 @@ export class PlayerDatabase {
 
       const existing = dbPlayers[name] || Object.values(dbPlayers).find((p) => p.name.toLowerCase() === lowerName);
       const isOnline = onlineSet.has(lowerName) || (fresh.guid && onlineSet.has(fresh.guid.toLowerCase()));
+      const accurateLastSeen = getAccurateLastSeen(worldData, lowerName, existing, isOnline);
 
       if (fresh.registeredOnly) {
         // El jugador solo apareció en GameState (está desconectado y el save no tiene su JSON activo)
-        if (existing && existing.totalXp > 0) {
+        if (existing) {
           // Restaurar todas las estadísticas históricas acumuladas
+          const hasRealData =
+            (existing.totalXp || 0) > 0 ||
+            (existing.playtimeSeconds || 0) > 0 ||
+            (existing.structuresBuilt || 0) > 0 ||
+            (existing.uniqueKillsCount || 0) > 0;
           const restored = {
             ...existing,
             isOnline,
             platform: fresh.platform || existing.platform,
             guid: fresh.guid || existing.guid,
-            lastSeen: existing.lastSeen || new Date().toISOString(),
-            registeredOnly: false, // ¡Tiene datos reales, no es solo registrado!
+            lastSeen: accurateLastSeen,
+            registeredOnly: !hasRealData,
           };
           dbPlayers[name] = restored;
           mergedList.push(restored);
         } else {
           // Es un jugador nuevo que nunca ha registrado progreso
+          const now = new Date().toISOString();
           const record = {
             ...fresh,
             isOnline,
-            firstSeen: existing?.firstSeen || new Date().toISOString(),
-            lastSeen: new Date().toISOString(),
+            firstSeen: now,
+            lastSeen: isOnline ? now : null,
+            registeredOnly: true,
           };
           dbPlayers[name] = record;
           mergedList.push(record);
@@ -165,11 +201,12 @@ export class PlayerDatabase {
         // Tenemos datos frescos de GameProgress (el jugador jugó o estuvo activo en este save)
         if (!existing) {
           // Nuevo jugador con progreso
+          const now = new Date().toISOString();
           const newPlayer = {
             ...fresh,
             isOnline,
-            firstSeen: new Date().toISOString(),
-            lastSeen: new Date().toISOString(),
+            firstSeen: now,
+            lastSeen: isOnline ? now : (fresh.lastSeen || now),
             registeredOnly: false,
           };
           dbPlayers[name] = newPlayer;
@@ -290,8 +327,27 @@ export class PlayerDatabase {
             journalEntries,
             namedChests,
             lastLocation: fresh.lastLocation || existing.lastLocation,
+            coordinates: fresh.coordinates || existing.coordinates,
+            customization: fresh.customization || existing.customization,
+            vitals: fresh.vitals || existing.vitals,
+            activeStatusEffects: (fresh.activeStatusEffects && fresh.activeStatusEffects.length > 0)
+              ? fresh.activeStatusEffects
+              : (existing.activeStatusEffects || []),
+            equippedLoadout: (fresh.equippedLoadout && fresh.equippedLoadout.length > 0)
+              ? fresh.equippedLoadout
+              : (existing.equippedLoadout || []),
+            equippedSpells: (fresh.equippedSpells && fresh.equippedSpells.length > 0)
+              ? fresh.equippedSpells
+              : (existing.equippedSpells || []),
+            utilityCooldowns: fresh.utilityCooldowns || existing.utilityCooldowns || [],
+            discoveredLocations: Array.from(
+              new Set([...(existing.discoveredLocations || []), ...(fresh.discoveredLocations || [])])
+            ),
+            activeQuests: (fresh.activeQuests && fresh.activeQuests.length > 0)
+              ? fresh.activeQuests
+              : (existing.activeQuests || []),
             firstSeen: existing.firstSeen || new Date().toISOString(),
-            lastSeen: isOnline ? new Date().toISOString() : (existing.lastSeen || new Date().toISOString()),
+            lastSeen: accurateLastSeen,
             registeredOnly: false,
           };
 
