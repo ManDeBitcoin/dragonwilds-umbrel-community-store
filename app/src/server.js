@@ -23,7 +23,7 @@ const runtime = new Runtime();
 const sessions = new Map();
 const loginAttempts = new Map();
 let localAuth = null;
-const APP_VERSION = "0.1.16";
+const APP_VERSION = "0.1.17";
 const BUILD_ID = `${APP_VERSION}-${Date.now().toString(36)}`;
 
 const mimeTypes = {
@@ -283,7 +283,7 @@ async function api(req, res, url) {
       if (action === "update") {
         await runtime.stop();
         if (await hasSavedData()) await runtime.createBackup("pre-update", { serverAlreadyStopped: true });
-        await runtime.start();
+        await runtime.start({ update: true, validate: true });
       }
       if (action === "validate") {
         await runtime.stop();

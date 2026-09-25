@@ -6,7 +6,7 @@ services:
 
   app:
     # Release checklist: pin the published tag with its manifest digest before adding this store to Umbrel.
-    image: ghcr.io/mandebitcoin/dragonwilds-umbrel:0.1.16
+    image: ghcr.io/mandebitcoin/dragonwilds-umbrel:0.1.17
     restart: on-failure
 
 

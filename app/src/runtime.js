@@ -646,7 +646,7 @@ export class Runtime extends EventEmitter {
     return publicSettings(this.settings);
   }
 
-  gameEnvironment(validate = false) {
+  gameEnvironment(validate = false, update = false) {
     return {
       ...process.env,
       HOME: "/home/steam",
@@ -660,6 +660,7 @@ export class Runtime extends EventEmitter {
       RSDW_PORT: String(GAME_PORT),
       RSDW_AUTO_STOP_ON_UPDATE: this.settings.autoUpdate ? "true" : "false",
       STEAMAPPVALIDATE: validate ? "1" : "0",
+      STEAMAPPUPDATE: update ? "1" : "0",
     };
   }
 
@@ -706,7 +707,7 @@ export class Runtime extends EventEmitter {
     if (!this.settings.configured) throw new Error("Completa el asistente inicial antes de arrancar.");
     this.desiredRunning = true;
     this.serverState = "starting";
-    this.serverMessage = options.validate ? "Validando archivos y arrancando" : "Actualizando y arrancando";
+    this.serverMessage = options.validate ? "Validando archivos y arrancando" : (options.update ? "Actualizando y arrancando" : "Arrancando servidor");
     this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
     await this.applyVpn();
     await mkdir(WORLD_DIR, { recursive: true });
@@ -716,6 +717,10 @@ export class Runtime extends EventEmitter {
     } catch {}
 
     if (process.env.MOCK_GAME !== "1") {
+      try {
+        await command("pkill", ["-9", "-f", "RSDragonwilds"], { allowFailure: true, timeoutMs: 3000 });
+        await new Promise((r) => setTimeout(r, 500));
+      } catch {}
       try {
         const savedDir = join(SERVER_DIR, "RSDragonwilds", "Saved");
         if (await exists(savedDir)) {
@@ -730,11 +735,12 @@ export class Runtime extends EventEmitter {
       : [];
     const spawnTimestamp = Date.now();
     this.child = spawn(executable, args, {
-      env: this.gameEnvironment(Boolean(options.validate)),
+      env: this.gameEnvironment(Boolean(options.validate), Boolean(options.update)),
       cwd: process.env.MOCK_GAME === "1" ? process.cwd() : "/home/steam",
       uid: process.env.MOCK_GAME === "1" ? undefined : GAME_UID,
       gid: process.env.MOCK_GAME === "1" ? undefined : GAME_GID,
       stdio: ["ignore", "pipe", "pipe"],
+      detached: process.platform !== "win32",
     });
     this.startedAt = new Date().toISOString();
     this.addLog("world", `Servidor arrancando con el mundo: [${this.settings.worldName || "Chavito"}]`);
@@ -806,6 +812,11 @@ export class Runtime extends EventEmitter {
       this.restartTimer = null;
     }
     if (!this.child || this.child.exitCode !== null || this.child.killed) {
+      if (process.env.MOCK_GAME !== "1") {
+        try {
+          await command("pkill", ["-9", "-f", "RSDragonwilds"], { allowFailure: true, timeoutMs: 3000 });
+        } catch {}
+      }
       this.child = null;
       this.startedAt = null;
       this.onlinePlayers.clear();
@@ -820,14 +831,27 @@ export class Runtime extends EventEmitter {
     this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: this.startedAt });
     const child = this.child;
     try {
-      child.kill("SIGTERM");
+      if (child.pid && process.platform !== "win32") {
+        try { process.kill(-child.pid, "SIGTERM"); } catch {}
+      }
+      try { child.kill("SIGTERM"); } catch {}
     } catch {}
     await Promise.race([
       new Promise((resolveStop) => child.once("exit", resolveStop)),
       new Promise((resolveStop) => setTimeout(resolveStop, 15_000)),
     ]);
     if (this.child === child && child.exitCode === null) {
-      try { child.kill("SIGKILL"); } catch {}
+      try {
+        if (child.pid && process.platform !== "win32") {
+          try { process.kill(-child.pid, "SIGKILL"); } catch {}
+        }
+        child.kill("SIGKILL");
+      } catch {}
+    }
+    if (process.env.MOCK_GAME !== "1") {
+      try {
+        await command("pkill", ["-9", "-f", "RSDragonwilds"], { allowFailure: true, timeoutMs: 3000 });
+      } catch {}
     }
     this.child = null;
     this.startedAt = null;

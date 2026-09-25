@@ -4,9 +4,11 @@ set -Eeuo pipefail
 STEAMAPPDIR="${STEAMAPPDIR:-/home/steam/rsdw-dedicated}"
 STEAMCMDDIR="${STEAMCMDDIR:-/home/steam/steamcmd}"
 STEAMAPPID="${STEAMAPPID:-4019830}"
+STEAMAPPUPDATE="${STEAMAPPUPDATE:-0}"
 STEAMAPPVALIDATE="${STEAMAPPVALIDATE:-0}"
 RSDW_PORT="${RSDW_PORT:-23409}"
 RSDW_LAUNCH="${STEAMAPPDIR}/RSDragonwildsServer.sh"
+RSDW_SHIPPING="${STEAMAPPDIR}/RSDragonwilds/Binaries/Linux/RSDragonwildsServer-Linux-Shipping"
 RSDW_CONFIG="${STEAMAPPDIR}/RSDragonwilds/Saved/Config/LinuxServer/DedicatedServer.ini"
 
 echo "[Dragonwilds] Preparando entorno del servidor dedicado..."
@@ -18,7 +20,7 @@ if [[ -f "${STEAMCMDDIR}/linux64/steamclient.so" ]]; then
 fi
 
 # 2. Descargar o validar binarios si no existen o se solicitó explícitamente
-if [[ ! -x "${RSDW_LAUNCH}" || "${STEAMAPPVALIDATE}" == "1" ]]; then
+if [[ (! -f "${RSDW_SHIPPING}" && ! -x "${RSDW_LAUNCH}") || "${STEAMAPPVALIDATE}" == "1" || "${STEAMAPPUPDATE}" == "1" ]]; then
   echo "[Dragonwilds] Descargando/actualizando servidor mediante SteamCMD (App ID ${STEAMAPPID})..."
   mkdir -p "${STEAMAPPDIR}"
 
@@ -34,15 +36,18 @@ if [[ ! -x "${RSDW_LAUNCH}" || "${STEAMAPPVALIDATE}" == "1" ]]; then
     +app_update "${STEAMAPPID}" ${validate_arg} \
     +quit || {
       echo "[Dragonwilds] ERROR: SteamCMD finalizó con error al descargar/actualizar." >&2
-      if [[ ! -x "${RSDW_LAUNCH}" ]]; then
+      if [[ ! -f "${RSDW_SHIPPING}" && ! -x "${RSDW_LAUNCH}" ]]; then
         exit 1
       fi
     }
 fi
 
-# 3. Permisos ejecutables para el gestor de caídas
+# 3. Permisos ejecutables para el gestor de caídas y binario
 if [[ -f "${STEAMAPPDIR}/RSDragonwilds/Plugins/Developer/Sentry/Binaries/Linux/crashpad_handler" ]]; then
   chmod +x "${STEAMAPPDIR}/RSDragonwilds/Plugins/Developer/Sentry/Binaries/Linux/crashpad_handler" 2>/dev/null || true
+fi
+if [[ -f "${RSDW_SHIPPING}" ]]; then
+  chmod +x "${RSDW_SHIPPING}" 2>/dev/null || true
 fi
 
 # 4. Asegurar DedicatedServer.ini inicial si no existe ninguno
@@ -62,8 +67,16 @@ bAllowSendingCrashDumps=True
 EOF
 fi
 
-# 5. Cambiar al directorio del juego y ejecutar respetando la arquitectura original
+# 5. Cambiar al directorio del juego y ejecutar respetando la arquitectura del motor
 cd "${STEAMAPPDIR}/RSDragonwilds"
-echo "[Dragonwilds] Arrancando RSDragonwildsServer.sh en puerto UDP ${RSDW_PORT}..."
 
-exec bash "${RSDW_LAUNCH}" -log -NewConsole -Port="${RSDW_PORT}"
+if [[ -x "${RSDW_SHIPPING}" ]]; then
+  echo "[Dragonwilds] Arrancando binario dedicado RSDragonwildsServer-Linux-Shipping en puerto UDP ${RSDW_PORT}..."
+  exec "${RSDW_SHIPPING}" RSDragonwilds -log -NewConsole -Port="${RSDW_PORT}"
+elif [[ -x "${RSDW_LAUNCH}" ]]; then
+  echo "[Dragonwilds] Arrancando RSDragonwildsServer.sh en puerto UDP ${RSDW_PORT}..."
+  exec bash "${RSDW_LAUNCH}" -log -NewConsole -Port="${RSDW_PORT}"
+else
+  echo "[Dragonwilds] ERROR: No se encontró ejecutable del servidor en ${STEAMAPPDIR}." >&2
+  exit 1
+fi

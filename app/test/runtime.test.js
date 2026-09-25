@@ -475,5 +475,23 @@ test("Runtime.getLogs filtra por categoría, respeta límites y enmascara secret
   assert.deepEqual(unknown, []);
 });
 
+test("Runtime.gameEnvironment propaga adecuadamente STEAMAPPVALIDATE y STEAMAPPUPDATE", async () => {
+  const { Runtime } = await import("../src/runtime.js");
+  const rt = new Runtime();
 
+  const envDefault = rt.gameEnvironment();
+  assert.equal(envDefault.STEAMAPPVALIDATE, "0");
+  assert.equal(envDefault.STEAMAPPUPDATE, "0");
 
+  const envValidate = rt.gameEnvironment(true, false);
+  assert.equal(envValidate.STEAMAPPVALIDATE, "1");
+  assert.equal(envValidate.STEAMAPPUPDATE, "0");
+
+  const envUpdate = rt.gameEnvironment(false, true);
+  assert.equal(envUpdate.STEAMAPPVALIDATE, "0");
+  assert.equal(envUpdate.STEAMAPPUPDATE, "1");
+
+  const envBoth = rt.gameEnvironment(true, true);
+  assert.equal(envBoth.STEAMAPPVALIDATE, "1");
+  assert.equal(envBoth.STEAMAPPUPDATE, "1");
+});
