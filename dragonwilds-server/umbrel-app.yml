@@ -2,7 +2,7 @@ manifestVersion: 1
 id: dragonwilds-server
 category: networking
 name: RuneScape Dragonwilds Server
-version: "0.1.13"
+version: "0.1.14"
 tagline: Tu mundo persistente, administrado desde Umbrel
 description: >-
   Ejecuta y administra un servidor dedicado de RuneScape: Dragonwilds desde una
@@ -20,12 +20,14 @@ description: >-
   runtime arm64. El modo WireGuard necesita `/dev/net/tun` y capacidades de red
   dentro del contenedor; no se monta el socket Docker del host.
 releaseNotes: >-
-  v0.1.13: Rediseño visual del Podio de Honor ("Dragonwilds Wrapped") con estrado
-  horizontal de tres niveles (Plata, Oro elevado central y Bronce) y tablero de
-  especialidades compacto. Corrección integral en la extracción de estadísticas
-  reales al fusionar la persistencia SPUD (SpudCache/L_World.lvl) con los archivos de
-  guardado, resolviendo estadísticas en 0 para jugadores desconectados y garantizando
-  el mapeo exacto de cuentas y reclamos de territorio.
+  v0.1.14: Corrección crítica de bucle infinito de reinicios y congelamiento del
+  dashboard tras cambiar contraseñas o caídas inesperadas del servidor. Se implementó
+  un circuito disyuntor (circuit breaker) que frena el auto-reinicio tras 3 fallos consecutivos,
+  cancelación inmediata de timers al pulsar Detener, eliminación de bloqueos I/O de disco
+  por chown recursivo en 20 GB de binarios, timeouts en comandos del sistema, soporte
+  explícito para borrar contraseña de acceso al mundo mediante casilla ("Sin contraseña /
+  Mundo público"), entrecomillado seguro de contraseñas con espacios y saneamiento de
+  bloques legacy erróneos en DedicatedServer.ini.
 
 
 developer: Dragonwilds Community

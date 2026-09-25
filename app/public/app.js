@@ -26,21 +26,30 @@ const app = {
 
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    credentials: "same-origin",
-    ...options,
-    headers: {
-      ...(options.body && !(options.body instanceof Blob) && !(options.body instanceof File) ? { "content-type": "application/json" } : {}),
-      ...(options.headers || {}),
-    },
-  });
-  const contentType = response.headers.get("content-type") || "";
-  const result = contentType.includes("json") ? await response.json() : await response.text();
-  if (!response.ok) {
-    if (response.status === 401 && path !== "/api/login") showAuth();
-    throw new Error(result?.error || `Error HTTP ${response.status}`);
+  const timeoutMs = options.timeoutMs || 25000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error(`Tiempo de espera agotado al conectar con ${path}`)), timeoutMs);
+
+  try {
+    const response = await fetch(path, {
+      credentials: "same-origin",
+      ...options,
+      signal: options.signal || controller.signal,
+      headers: {
+        ...(options.body && !(options.body instanceof Blob) && !(options.body instanceof File) ? { "content-type": "application/json" } : {}),
+        ...(options.headers || {}),
+      },
+    });
+    const contentType = response.headers.get("content-type") || "";
+    const result = contentType.includes("json") ? await response.json() : await response.text();
+    if (!response.ok) {
+      if (response.status === 401 && path !== "/api/login") showAuth();
+      throw new Error(result?.error || `Error HTTP ${response.status}`);
+    }
+    return result;
+  } finally {
+    clearTimeout(timer);
   }
-  return result;
 }
 
 function toast(message, error = false) {
@@ -731,28 +740,36 @@ function initLogStream() {
 }
 
 function triggerFastPolling(durationMs = 20000) {
-  if (app.fastPoller) clearInterval(app.fastPoller);
-  app.fastPoller = setInterval(async () => {
+  stopFastPolling();
+  const startTime = Date.now();
+  let cancelled = false;
+
+  const poll = async () => {
+    if (cancelled || Date.now() - startTime >= durationMs) {
+      stopFastPolling();
+      return;
+    }
     try {
-      const status = await api("/api/status");
+      const status = await api("/api/status", { timeoutMs: 4000 });
       renderStatus(status);
     } catch {}
-  }, 1000);
+    if (!cancelled && Date.now() - startTime < durationMs) {
+      app.fastPoller = setTimeout(poll, 1500);
+    }
+  };
 
-  clearTimeout(triggerFastPolling.timer);
-  triggerFastPolling.timer = setTimeout(() => {
-    stopFastPolling();
-  }, durationMs);
+  app.fastPollerCancel = () => { cancelled = true; };
+  app.fastPoller = setTimeout(poll, 600);
 }
 
 function stopFastPolling() {
-  if (app.fastPoller) {
-    clearInterval(app.fastPoller);
-    app.fastPoller = null;
+  if (app.fastPollerCancel) {
+    app.fastPollerCancel();
+    app.fastPollerCancel = null;
   }
-  if (triggerFastPolling.timer) {
-    clearTimeout(triggerFastPolling.timer);
-    triggerFastPolling.timer = null;
+  if (app.fastPoller) {
+    clearTimeout(app.fastPoller);
+    app.fastPoller = null;
   }
 }
 
@@ -939,6 +956,24 @@ async function loadSettings() {
   assign("adminPassword", "");
   assign("vpn.privateKey", "");
   assign("vpn.presharedKey", "");
+  const worldClear = $("#setting-world-password-clear");
+  if (worldClear) {
+    worldClear.checked = false;
+    const pwdInput = $("#setting-world-password");
+    if (pwdInput) pwdInput.disabled = false;
+  }
+  const adminClear = $("#setting-admin-password-clear");
+  if (adminClear) {
+    adminClear.checked = false;
+    const adminInput = $("#setting-admin-password");
+    if (adminInput) adminInput.disabled = false;
+  }
+  const statusSpan = $("#world-pwd-status");
+  if (statusSpan) {
+    statusSpan.textContent = app.settings.hasWorldPassword
+      ? "(Actualmente: con clave)"
+      : "(Actualmente: público / sin clave)";
+  }
   updateVpnFields();
 }
 
@@ -972,7 +1007,9 @@ function settingsPayload(form) {
     serverName: data.get("serverName"),
     worldName: data.get("worldName"),
     worldPassword: data.get("worldPassword"),
+    worldPasswordClear: data.has("worldPasswordClear"),
     adminPassword: data.get("adminPassword"),
+    adminPasswordClear: data.has("adminPasswordClear"),
     platformPolicy: data.get("platformPolicy") || "Crossplay",
     administrators: data.get("administrators"),
     autoStart: false,
@@ -1473,6 +1510,20 @@ $("#copy-rules").addEventListener("click", async () => {
 $("#clear-log-view").addEventListener("click", () => { app.localLogClearedAt = Date.now(); renderLogs(app.status?.logs || []); });
 
 $$('input[name="networkMode"]').forEach((input) => input.addEventListener("change", updateVpnFields));
+$("#setting-world-password-clear")?.addEventListener("change", (e) => {
+  const input = $("#setting-world-password");
+  if (input) {
+    input.disabled = e.target.checked;
+    if (e.target.checked) input.value = "";
+  }
+});
+$("#setting-admin-password-clear")?.addEventListener("change", (e) => {
+  const input = $("#setting-admin-password");
+  if (input) {
+    input.disabled = e.target.checked;
+    if (e.target.checked) input.value = "";
+  }
+});
 $("#settings-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {

@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/styles.css?v=0.1.13" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.14" />
   </head>
   <body>
     <!-- SVG Symbol Sprite Library (Lucide style) -->
@@ -552,8 +552,22 @@
                 <label class="wide"><span>Player ID del propietario <b>*</b></span><input name="ownerId" required placeholder="Copia el ID desde Ajustes dentro del juego" /></label>
                 <label><span>Nombre del servidor <b>*</b></span><input name="serverName" required /></label>
                 <label><span>Nombre del mundo <b>*</b></span><input name="worldName" id="setting-world-name" list="world-datalist" required autocomplete="off" placeholder="Escribe o selecciona un mundo" /><datalist id="world-datalist"></datalist></label>
-                <label><span>Contraseña del mundo</span><input name="worldPassword" type="password" placeholder="Vacío conserva la actual" /></label>
-                <label><span>Contraseña admin del juego <b>*</b></span><input name="adminPassword" type="password" placeholder="Vacío conserva la actual" /></label>
+                <div>
+                  <label><span>Contraseña del mundo <small id="world-pwd-status" style="font-weight: normal; color: var(--muted);"></small></span><input name="worldPassword" id="setting-world-password" type="password" placeholder="Escribe para cambiarla o vacío para conservar" /></label>
+                  <label class="toggle-card inline-clear-toggle" style="margin-top: 0.35rem; padding: 0.5rem 0.75rem;">
+                    <input name="worldPasswordClear" id="setting-world-password-clear" type="checkbox" />
+                    <span style="font-size: 0.8rem;"><b>Sin contraseña</b><small>Mundo público sin clave de acceso</small></span>
+                    <i></i>
+                  </label>
+                </div>
+                <div>
+                  <label><span>Contraseña admin del juego (opcional)</span><input name="adminPassword" id="setting-admin-password" type="password" placeholder="Vacío conserva la actual" /></label>
+                  <label class="toggle-card inline-clear-toggle" style="margin-top: 0.35rem; padding: 0.5rem 0.75rem;">
+                    <input name="adminPasswordClear" id="setting-admin-password-clear" type="checkbox" />
+                    <span style="font-size: 0.8rem;"><b>Sin contraseña admin</b><small>Solo admins por KnownPlayerList</small></span>
+                    <i></i>
+                  </label>
+                </div>
                 <label class="wide">
                   <span>Política de Plataformas (Crossplay del Servidor)</span>
                   <select name="platformPolicy">

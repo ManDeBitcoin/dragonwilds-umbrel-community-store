@@ -26,6 +26,76 @@ test("valida una instalación directa y oculta secretos", () => {
   assert.equal(visible.hasAdminPassword, true);
 });
 
+test("valida configuración con borrado de contraseñas de mundo y admin", () => {
+  const initial = validateSettings({
+    ownerId: "eos-owner-123",
+    serverName: "Umbrel Test",
+    worldName: "Ashenfall",
+    worldPassword: "join-secret",
+    adminPassword: "admin-secret",
+    networkMode: "direct",
+  }, defaultSettings());
+
+  assert.equal(initial.worldPassword, "join-secret");
+  assert.equal(initial.adminPassword, "admin-secret");
+
+  const cleared = validateSettings({
+    worldPasswordClear: true,
+    adminPasswordClear: true,
+  }, initial);
+
+  assert.equal(cleared.worldPassword, "");
+  assert.equal(cleared.adminPassword, "");
+  const pub = publicSettings(cleared);
+  assert.equal(pub.hasWorldPassword, false);
+  assert.equal(pub.hasAdminPassword, false);
+});
+
+test("syncDedicatedServerIni limpia [ServerSettings] legacy, soporta contraseña vacía y entrecomillado con espacios", async () => {
+  const { Runtime } = await import("../src/runtime.js");
+  const { mkdtemp, readFile, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+
+  const tempDir = await mkdtemp(join(tmpdir(), "rsdw-sync-clean-"));
+  const iniPath = join(tempDir, "DedicatedServer.ini");
+  const legacyContent = `[ServerSettings]
+ServerPassword=LegacyWrong
+DifficultyType=3
+
+[/Script/Dominion.DedicatedServerSettings]
+ServerName=OldServer
+WorldPassword=OldPassword
+`;
+  await writeFile(iniPath, legacyContent, "utf8");
+
+  const rt = new Runtime();
+  rt.getDedicatedServerIniPaths = () => [iniPath];
+  rt.settings = {
+    ownerId: "00025be9182947128e2c6f899f51e1ba",
+    serverName: "My New Server",
+    worldName: "Chavito",
+    worldPassword: "pass with spaces",
+    platformPolicy: "Crossplay",
+  };
+
+  await rt.syncDedicatedServerIni("Chavito");
+
+  let content = await readFile(iniPath, "utf8");
+  assert.equal(content.includes("[ServerSettings]"), false);
+  assert.equal(content.includes("LegacyWrong"), false);
+  assert.match(content, /WorldPassword="pass with spaces"/);
+  assert.match(content, /ServerName=My New Server/);
+
+  // Ahora probar quitando la contraseña (vacía)
+  rt.settings.worldPassword = "";
+  await rt.syncDedicatedServerIni("Chavito");
+  content = await readFile(iniPath, "utf8");
+  assert.match(content, /WorldPassword=\r?\n|WorldPassword=$/m);
+
+  await rm(tempDir, { recursive: true, force: true });
+});
+
 test("rechaza WireGuard incompleto", () => {
   assert.throws(() => validateSettings({
     ownerId: "owner",

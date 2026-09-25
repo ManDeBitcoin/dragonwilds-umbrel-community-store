@@ -191,14 +191,14 @@ function updateIniSection(content, section, updates) {
 
 export function validateSettings(input, current = defaultSettings()) {
   const next = structuredClone(current);
-  next.ownerId = cleanText(input.ownerId, 128);
-  next.serverName = cleanText(input.serverName, 80);
-  next.worldName = cleanText(input.worldName, 80);
-  next.administrators = cleanText(input.administrators, 2048);
-  next.autoStart = Boolean(input.autoStart);
-  next.autoUpdate = Boolean(input.autoUpdate);
-  next.networkMode = input.networkMode === "direct" ? "direct" : "wireguard";
-  next.backupRetention = Math.min(50, Math.max(1, Number(input.backupRetention) || 10));
+  next.ownerId = cleanText(input.ownerId ?? current.ownerId, 128);
+  next.serverName = cleanText(input.serverName ?? current.serverName, 80);
+  next.worldName = cleanText(input.worldName ?? current.worldName, 80);
+  next.administrators = cleanText(input.administrators ?? current.administrators, 2048);
+  next.autoStart = Boolean(input.autoStart ?? current.autoStart);
+  next.autoUpdate = Boolean(input.autoUpdate ?? current.autoUpdate);
+  next.networkMode = (input.networkMode ?? current.networkMode) === "direct" ? "direct" : "wireguard";
+  next.backupRetention = Math.min(50, Math.max(1, Number(input.backupRetention ?? current.backupRetention) || 10));
   next.backupSchedule = ["disabled", "6h", "12h", "24h"].includes(input.backupSchedule) ? input.backupSchedule : (current.backupSchedule || "disabled");
   const tickCandidate = Number(input.performance?.tickRate ?? current.performance?.tickRate);
   next.performance = {
@@ -209,8 +209,11 @@ export function validateSettings(input, current = defaultSettings()) {
   next.platformPolicy = allowedPolicies.includes(input.platformPolicy) ? input.platformPolicy : (current.platformPolicy || "Crossplay");
 
   for (const key of SECRET_KEYS) {
-    if (Object.hasOwn(input, key) && input[key] !== "") next[key] = cleanText(input[key], 256);
-    if (input[`${key}Clear`] === true) next[key] = "";
+    if (input[`${key}Clear`] === true || input[`${key}Clear`] === "true" || input[`${key}Clear`] === 1) {
+      next[key] = "";
+    } else if (Object.hasOwn(input, key) && input[key] !== "") {
+      next[key] = cleanText(input[key], 256);
+    }
   }
 
   if (!next.ownerId) throw new Error("El Player ID del propietario es obligatorio.");
@@ -272,6 +275,7 @@ export function publicSettings(settings) {
 }
 
 async function command(commandName, args = [], options = {}) {
+  const timeoutMs = options.timeoutMs || 15000;
   return await new Promise((resolveCommand, rejectCommand) => {
     const child = spawn(commandName, args, {
       env: options.env || process.env,
@@ -282,10 +286,20 @@ async function command(commandName, args = [], options = {}) {
     });
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk) => (stdout += chunk.toString()));
-    child.stderr.on("data", (chunk) => (stderr += chunk.toString()));
-    child.once("error", rejectCommand);
+    const timer = setTimeout(() => {
+      try { child.kill("SIGKILL"); } catch {}
+      if (options.allowFailure) resolveCommand({ code: 124, stdout, stderr: "Comando cancelado por tiempo de espera" });
+      else rejectCommand(new Error(`Comando "${commandName}" agotó el tiempo de espera (${timeoutMs}ms)`));
+    }, timeoutMs);
+
+    child.stdout?.on("data", (chunk) => (stdout += chunk.toString()));
+    child.stderr?.on("data", (chunk) => (stderr += chunk.toString()));
+    child.once("error", (err) => {
+      clearTimeout(timer);
+      rejectCommand(err);
+    });
     child.once("close", (code) => {
+      clearTimeout(timer);
       const result = { code: code ?? 1, stdout: stdout.trim(), stderr: stderr.trim() };
       if (result.code === 0 || options.allowFailure) resolveCommand(result);
       else rejectCommand(new Error(result.stderr || `${commandName} terminó con código ${result.code}`));
@@ -338,6 +352,8 @@ export class Runtime extends EventEmitter {
     this.operation = Promise.resolve();
     this.backupScheduleTimer = null;
     this.vpnWatchdogTimer = null;
+    this.restartTimer = null;
+    this.recentCrashes = [];
   }
 
   async init() {
@@ -655,8 +671,10 @@ export class Runtime extends EventEmitter {
 
     if (process.env.MOCK_GAME !== "1") {
       try {
-        await command("chown", ["-R", `${GAME_UID}:${GAME_GID}`, SERVER_DIR], { allowFailure: true });
-        await command("chmod", ["-R", "u+rwX,g+rwX,o+rX", SERVER_DIR], { allowFailure: true });
+        const savedDir = join(SERVER_DIR, "RSDragonwilds", "Saved");
+        if (await exists(savedDir)) {
+          await command("chown", ["-R", `${GAME_UID}:${GAME_GID}`, savedDir], { allowFailure: true, timeoutMs: 5000 });
+        }
       } catch {}
     }
 
@@ -664,6 +682,7 @@ export class Runtime extends EventEmitter {
     const args = process.env.MOCK_GAME === "1"
       ? ["-e", "console.log('Mock Dragonwilds online'); setInterval(()=>console.log('heartbeat'), 2000)"]
       : [];
+    const spawnTimestamp = Date.now();
     this.child = spawn(executable, args, {
       env: this.gameEnvironment(Boolean(options.validate)),
       cwd: process.env.MOCK_GAME === "1" ? process.cwd() : "/home/steam",
@@ -694,15 +713,38 @@ export class Runtime extends EventEmitter {
       this.startedAt = null;
       this.onlinePlayers.clear();
       this.emit("players", { onlinePlayers: [], playerCount: 0 });
+
+      // Protección contra bucle infinito de caídas (circuit breaker)
+      const uptimeSec = (Date.now() - spawnTimestamp) / 1000;
+      if (uptimeSec < 30) {
+        this.recentCrashes.push(Date.now());
+      }
+      this.recentCrashes = this.recentCrashes.filter((ts) => Date.now() - ts < 90_000);
+
+      if (this.recentCrashes.length >= 3) {
+        this.desiredRunning = false;
+        this.serverState = "error";
+        this.serverMessage = "Reinicio automático detenido tras 3 caídas consecutivas";
+        this.addLog("panel", "ADVERTENCIA: El servidor se cerró de forma imprevista 3 veces seguidas en menos de 90 segundos. Se detuvo el reinicio automático para proteger la base de datos y la partida. Revisa la pestaña de Registros o la configuración.");
+        this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
+        return;
+      }
+
       if (this.desiredRunning) {
         this.serverState = "starting";
         this.serverMessage = "Reinicio automático en 5 segundos";
         this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
-        setTimeout(() => this.enqueue(() => this.start()).catch((error) => {
-          this.serverState = "error";
-          this.serverMessage = error.message;
-          this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
-        }), 5000);
+        if (this.restartTimer) clearTimeout(this.restartTimer);
+        this.restartTimer = setTimeout(() => {
+          this.restartTimer = null;
+          if (this.desiredRunning) {
+            this.enqueue(() => this.start()).catch((error) => {
+              this.serverState = "error";
+              this.serverMessage = error.message;
+              this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
+            });
+          }
+        }, 5000);
       } else {
         this.serverState = "stopped";
         this.serverMessage = "Servidor detenido";
@@ -713,22 +755,36 @@ export class Runtime extends EventEmitter {
 
   async stop() {
     this.desiredRunning = false;
-    if (!this.child) {
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
+    if (!this.child || this.child.exitCode !== null || this.child.killed) {
+      this.child = null;
+      this.startedAt = null;
+      this.onlinePlayers.clear();
       this.serverState = "stopped";
       this.serverMessage = "Servidor detenido";
       this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: null });
+      this.emit("players", { onlinePlayers: [], playerCount: 0 });
       return;
     }
     this.serverState = "stopping";
     this.serverMessage = "Guardando y deteniendo";
     this.emit("state", { state: this.serverState, message: this.serverMessage, startedAt: this.startedAt });
     const child = this.child;
-    child.kill("SIGTERM");
+    try {
+      child.kill("SIGTERM");
+    } catch {}
     await Promise.race([
       new Promise((resolveStop) => child.once("exit", resolveStop)),
-      new Promise((resolveStop) => setTimeout(resolveStop, 45_000)),
+      new Promise((resolveStop) => setTimeout(resolveStop, 15_000)),
     ]);
-    if (this.child === child) child.kill("SIGKILL");
+    if (this.child === child && child.exitCode === null) {
+      try { child.kill("SIGKILL"); } catch {}
+    }
+    this.child = null;
+    this.startedAt = null;
     this.onlinePlayers.clear();
     this.serverState = "stopped";
     this.serverMessage = "Servidor detenido";
@@ -926,12 +982,9 @@ export class Runtime extends EventEmitter {
 
 
   async syncDedicatedServerIni(worldName, rules = {}) {
-    const configDirs = [
-      join(SERVER_DIR, "RSDragonwilds", "Saved", "Config", "LinuxServer"),
-      join(SERVER_DIR, "RSDragonwilds", "Saved", "Config", "WindowsServer"),
-    ];
-    for (const dir of configDirs) {
-      const iniPath = join(dir, "DedicatedServer.ini");
+    const iniPaths = this.getDedicatedServerIniPaths();
+    for (const iniPath of iniPaths) {
+      const dir = dirname(iniPath);
       try {
         await mkdir(dir, { recursive: true });
         try {
@@ -942,25 +995,18 @@ export class Runtime extends EventEmitter {
         if (worldName) updates.DefaultWorldName = worldName;
         if (this.settings.serverName) updates.ServerName = this.settings.serverName;
         if (this.settings.ownerId) updates.OwnerId = this.settings.ownerId;
-        if (this.settings.worldPassword) updates.WorldPassword = this.settings.worldPassword;
-        if (this.settings.adminPassword) updates.AdminPassword = this.settings.adminPassword;
+        const rawPwd = this.settings.worldPassword ?? "";
+        updates.WorldPassword = rawPwd.includes(" ") && !rawPwd.startsWith('"') ? `"${rawPwd}"` : rawPwd;
         updates.PlatformPolicy = this.settings.platformPolicy || "Crossplay";
-        if (typeof rules.difficulty === "number") {
-          updates.DifficultyType = String(rules.difficulty);
-          updates.SurvivalDifficulty = String(rules.difficulty);
-        }
-        if (typeof rules.pvpEnabled === "boolean" || typeof rules.pvpEnabled === "number") {
-          updates.PvpEnabled = rules.pvpEnabled ? "1" : "0";
-          updates.FriendlyFire = rules.pvpEnabled ? "1" : "0";
-          updates.bFriendlyFire = rules.pvpEnabled ? "1" : "0";
-        }
         if (!content) {
           content = ";METADATA=(Diff=true, UseCommands=true)\n";
-          updates.PlatformPolicy = this.settings.platformPolicy || "Crossplay";
           updates.bAllowSendingCrashDumps = "True";
         }
+        // Limpiar cualquier bloque legacy [ServerSettings] si existía previamente
+        if (content.includes("[ServerSettings]")) {
+          content = content.replace(/\[ServerSettings\][\s\S]*?(?=\r?\n\[|$)/i, "").trim() + "\n";
+        }
         content = updateIniSection(content, "/Script/Dominion.DedicatedServerSettings", updates);
-        content = updateIniSection(content, "ServerSettings", updates);
         await atomicWrite(iniPath, content, 0o666, GAME_UID, GAME_GID);
         try {
           await chown(iniPath, GAME_UID, GAME_GID);
