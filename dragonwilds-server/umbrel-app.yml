@@ -2,7 +2,7 @@ manifestVersion: 1
 id: dragonwilds-server
 category: networking
 name: RuneScape Dragonwilds Server
-version: "0.1.9"
+version: "0.1.10"
 tagline: Tu mundo persistente, administrado desde Umbrel
 description: >-
   Ejecuta y administra un servidor dedicado de RuneScape: Dragonwilds desde una
@@ -20,10 +20,13 @@ description: >-
   runtime arm64. El modo WireGuard necesita `/dev/net/tun` y capacidades de red
   dentro del contenedor; no se monta el socket Docker del host.
 releaseNotes: >-
-  v0.1.9: Optimización de rendimiento contra tirones y lag spikes (rubberbanding).
-  Silencia el spam masivo de advertencias de scripts en Engine.ini (LogScript=Error),
-  multiplica por 10 el ancho de banda y buffer de red UDP (MaxClientRate=150000)
-  para evitar desincronización y expiración de movimientos durante el streaming de celdas.
+  v0.1.10: Añadida la nueva sección de Clasificación (Leaderboards) y "Dragonwilds Wrapped"
+  para visualizar podio de honor, fichas de aventureros y exportar resúmenes formateados
+  para Discord y JSON para Inteligencia Artificial.
+  Detecta con precisión las desconexiones de jugadores para evitar jugadores fantasma,
+  aísla los registros en búferes dedicados por categoría y corrige la reactividad del
+  formulario de reglas de mundo y fuego amigo (JcJ).
+
 
 developer: Dragonwilds Community
 website: https://dragonwilds.runescape.com/news/how-to-dedicated-servers
