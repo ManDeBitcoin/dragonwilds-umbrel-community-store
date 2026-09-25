@@ -20,6 +20,8 @@ const app = {
   cpuHistory: [],
   ramHistory: [],
   currentLeaderboardStats: null,
+  lastLeaderboardWorldMtime: null,
+  lastLeaderboardLoadedAt: 0,
 };
 
 
@@ -513,6 +515,19 @@ function renderWorlds(worlds) {
       $("#world-rules-panel")?.scrollIntoView({ behavior: "smooth" });
     });
   });
+
+  // Auto-actualización dinámica de la pestaña de clasificación cuando el juego guarda en disco
+  const isLeaderboardPage = $("#page-leaderboard")?.classList.contains("active");
+  if (isLeaderboardPage && Array.isArray(status.worlds)) {
+    const currentWorldName = $("#leaderboard-world-select")?.value || app.settings?.worldName || "Chavito";
+    const worldObj = status.worlds.find((w) => (w.baseName || w.name.replace(/\.sav$/i, "")) === currentWorldName);
+    const mtime = worldObj?.updatedAt;
+    const shouldRefresh = (mtime && mtime !== app.lastLeaderboardWorldMtime) || (Date.now() - app.lastLeaderboardLoadedAt > 45000);
+    if (shouldRefresh) {
+      app.lastLeaderboardWorldMtime = mtime;
+      loadLeaderboard(currentWorldName, true).catch(() => {});
+    }
+  }
 }
 
 function loadWorldRulesIntoForm(worldName, worldsList = app.status?.worlds || []) {
@@ -1010,10 +1025,10 @@ function showError(error) {
   toast(error.message || String(error), true);
 }
 
-async function loadLeaderboard(targetWorld) {
+async function loadLeaderboard(targetWorld, silent = false) {
   const select = $("#leaderboard-world-select");
   const refreshBtn = $("#refresh-leaderboard");
-  if (refreshBtn) refreshBtn.classList.add("rotating");
+  if (refreshBtn && !silent) refreshBtn.classList.add("rotating");
 
   try {
     // Rellenar selector de mundos si está vacío
@@ -1037,15 +1052,18 @@ async function loadLeaderboard(targetWorld) {
 
     const stats = await api(`/api/worlds/${encodeURIComponent(world)}/stats`);
     app.currentLeaderboardStats = stats;
+    app.lastLeaderboardLoadedAt = Date.now();
     renderLeaderboard(stats);
   } catch (err) {
-    const podiumGrid = $("#leaderboard-podium-grid");
-    if (podiumGrid) podiumGrid.innerHTML = `<p class="empty" style="color: var(--red);">No se pudieron cargar las estadísticas: ${escapeHtml(err.message)}</p>`;
-    const playersGrid = $("#leaderboard-players-grid");
-    if (playersGrid) playersGrid.innerHTML = '<p class="empty">Comprueba que el mundo seleccionado tenga un archivo de guardado válido.</p>';
-    showError(err);
+    if (!silent) {
+      const podiumGrid = $("#leaderboard-podium-grid");
+      if (podiumGrid) podiumGrid.innerHTML = `<p class="empty" style="color: var(--red);">No se pudieron cargar las estadísticas: ${escapeHtml(err.message)}</p>`;
+      const playersGrid = $("#leaderboard-players-grid");
+      if (playersGrid) playersGrid.innerHTML = '<p class="empty">Comprueba que el mundo seleccionado tenga un archivo de guardado válido.</p>';
+      showError(err);
+    }
   } finally {
-    if (refreshBtn) {
+    if (refreshBtn && !silent) {
       setTimeout(() => refreshBtn.classList.remove("rotating"), 500);
     }
   }
@@ -1054,6 +1072,15 @@ async function loadLeaderboard(targetWorld) {
 function renderLeaderboard(stats) {
   const worldTag = $("#wrapped-world-tag");
   if (worldTag) worldTag.textContent = `Mundo: ${stats.worldName}`;
+
+  const liveTag = $("#wrapped-live-indicator");
+  if (liveTag) {
+    const timeStr = stats.generatedAt
+      ? new Date(stats.generatedAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      : "";
+    liveTag.textContent = `● Dinámico en vivo (${timeStr})`;
+    liveTag.title = "Las clasificaciones se recalculan dinámicamente en tiempo real leyendo los guardados del servidor.";
+  }
 
   const podiumGrid = $("#leaderboard-podium-grid");
   const hl = stats.highlights || {};
