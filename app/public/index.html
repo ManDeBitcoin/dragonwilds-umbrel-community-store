@@ -112,11 +112,13 @@
           <button data-page="overview" class="active"><svg class="nav-svg"><use href="#icon-home"/></svg> Resumen</button>
           <button data-page="world"><svg class="nav-svg"><use href="#icon-world"/></svg> Mundo</button>
           <button data-page="players"><svg class="nav-svg"><use href="#icon-players"/></svg> Jugadores</button>
+          <button data-page="leaderboard"><svg class="nav-svg"><use href="#icon-crown"/></svg> Clasificación</button>
           <button data-page="backups"><svg class="nav-svg"><use href="#icon-backups"/></svg> Backups</button>
           <button data-page="network"><svg class="nav-svg"><use href="#icon-network"/></svg> Red y VPN</button>
           <button data-page="logs"><svg class="nav-svg"><use href="#icon-logs"/></svg> Registros</button>
           <button data-page="settings"><svg class="nav-svg"><use href="#icon-settings"/></svg> Ajustes</button>
         </nav>
+
         <div class="sidebar-bottom">
           <div class="mini-health"><i id="side-dot"></i><span><b id="side-state">Comprobando</b><small id="side-detail">—</small></span></div>
           <button id="logout" class="link-button">Cerrar sesión</button>
@@ -413,7 +415,63 @@
           </article>
         </section>
 
+        <section id="page-leaderboard" class="page">
+          <div class="page-intro">
+            <div>
+              <p class="eyebrow">DRAGONWILDS WRAPPED & ESTADÍSTICAS</p>
+              <h3>Clasificación de Aventureros</h3>
+              <p>Métricas de supervivencia, experiencia, horas, jefes cazados y huella en el mundo extraídas del savegame.</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+              <select id="leaderboard-world-select" style="font-weight: 600; padding: 0.45rem 0.8rem; background: var(--bg-card); color: var(--text-bright); border: 1px solid var(--line); border-radius: 8px;">
+                <option value="">Cargando mundos...</option>
+              </select>
+              <button id="copy-wrapped-discord" class="button light" type="button" title="Copiar resumen con formato para Discord/WhatsApp">
+                <svg class="action-svg"><use href="#icon-copy"/></svg> Copiar Wrapped (Discord)
+              </button>
+              <button id="copy-wrapped-json" class="button ghost" type="button" title="Copiar JSON crudo para prompts de Inteligencia Artificial o herramientas creativas">
+                <svg class="action-svg"><use href="#icon-sparkles"/></svg> Copiar JSON (IA)
+              </button>
+              <button id="download-wrapped-json" class="button ghost" type="button" title="Descargar archivo JSON completo">
+                <svg class="action-svg"><use href="#icon-download"/></svg> Exportar JSON
+              </button>
+              <button id="refresh-leaderboard" class="button tiny ghost" type="button" title="Refrescar estadísticas">
+                <svg class="action-svg"><use href="#icon-refresh"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Podio de Honor ("Dragonwilds Wrapped") -->
+          <article class="panel dark-panel" style="margin-bottom: 1.5rem;">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">PODIO DE HONOR</p>
+                <h3 style="font-family: 'Cinzel', serif;">👑 Récords del Servidor</h3>
+              </div>
+              <span id="wrapped-world-tag" class="status-badge online">Mundo activo</span>
+            </div>
+            <div id="leaderboard-podium-grid" class="leaderboard-podium-grid">
+              <p class="empty">Cargando récords del servidor...</p>
+            </div>
+          </article>
+
+          <!-- Tarjetas individuales de jugadores -->
+          <article class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">FICHAS INDIVIDUALES</p>
+                <h3>Aventureros Registrados (<span id="leaderboard-players-count">0</span>)</h3>
+              </div>
+              <p class="muted small" style="margin: 0;">Haz clic en <b>Copiar Ficha</b> para compartir en Discord o <b>JSON IA</b> para crear arte o marcos personalizados con IA.</p>
+            </div>
+            <div id="leaderboard-players-grid" class="leaderboard-players-grid" style="margin-top: 1rem;">
+              <p class="empty">Cargando jugadores...</p>
+            </div>
+          </article>
+        </section>
+
         <section id="page-backups" class="page">
+
           <div class="page-intro"><div><h3>Backups recuperables</h3><p>Cada actualización y restauración crea un punto de retorno antes de modificar los datos.</p></div><button id="create-backup" class="button primary">Crear backup ahora</button></div>
           <article class="panel"><div id="backup-list" class="backup-list"><p class="empty">Todavía no hay backups.</p></div></article>
         </section>

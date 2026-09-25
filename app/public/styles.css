@@ -233,5 +233,200 @@ dialog { width:min(430px,calc(100vw - 2rem));border:1px solid var(--line);border
   animation: spin 0.65s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
+/* Leaderboard & Dragonwilds Wrapped */
+.leaderboard-podium-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.podium-card {
+  background: #111814;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.podium-card:hover {
+  transform: translateY(-2px);
+  border-color: #516457;
+}
+
+.podium-card.gold {
+  border-color: #f0ae5055;
+  background: linear-gradient(145deg, #1b1911 0%, #111814 100%);
+}
+
+.podium-card.gold::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #f0ae50, #9ddc7b);
+}
+
+.podium-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.podium-card-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.podium-card-icon {
+  font-size: 1.25rem;
+}
+
+.podium-card-player {
+  font-family: var(--font-fantasy);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0.2rem 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.podium-card.gold .podium-card-player {
+  color: var(--amber);
+}
+
+.podium-card-metric {
+  font-size: 0.85rem;
+  color: var(--green);
+  font-weight: 600;
+  margin-top: 0.2rem;
+}
+
+.leaderboard-players-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.2rem;
+}
+
+.player-stat-card {
+  background: #111814;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  transition: border-color 0.2s;
+}
+
+.player-stat-card:hover {
+  border-color: #3b4e41;
+}
+
+.player-stat-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.player-stat-card-user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.player-avatar-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  border: 2px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-fantasy);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--amber);
+  flex-shrink: 0;
+}
+
+.player-stat-card-name {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-stat-card-subtitle {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.player-chips-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  background: #0d1310;
+  padding: 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #1a241d;
+}
+
+.stat-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.stat-chip small {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-chip strong {
+  font-size: 0.95rem;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.stat-chip strong.accent {
+  color: var(--green);
+}
+
+.stat-chip strong.amber {
+  color: var(--amber);
+}
+
+.player-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: auto;
+  border-top: 1px solid #1c2720;
+  padding-top: 0.8rem;
+}
+
+
 
 

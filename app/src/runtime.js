@@ -30,6 +30,7 @@ import {
   PVP_LABELS,
   CROSSPLAY_LABELS,
 } from "./world-editor.js";
+import { extractWorldStatsFromFile } from "./stats-extractor.js";
 
 const GAME_UID = Number(process.env.GAME_UID || 1000);
 const GAME_GID = Number(process.env.GAME_GID || 1000);
@@ -897,6 +898,14 @@ export class Runtime extends EventEmitter {
     if (!(await exists(path))) throw new Error(`El mundo "${worldName}" no existe.`);
     return await readWorldRulesFromFile(path);
   }
+
+  async getWorldStats(worldName) {
+    const clean = basename(worldName || this.settings.worldName || "Chavito").replace(/\.(sav|backup)$/i, "");
+    const path = await this.findWorldPath(clean);
+    if (!(await exists(path))) throw new Error(`El mundo "${clean}" no existe.`);
+    return await extractWorldStatsFromFile(path);
+  }
+
 
   async syncDedicatedServerIni(worldName, rules = {}) {
     const configDirs = [

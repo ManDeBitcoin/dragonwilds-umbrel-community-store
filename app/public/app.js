@@ -19,7 +19,9 @@ const app = {
   localLogClearedAt: 0,
   cpuHistory: [],
   ramHistory: [],
+  currentLeaderboardStats: null,
 };
+
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -317,15 +319,26 @@ function navigate(page) {
   const target = $(`#page-${page}`) ? page : "overview";
   $$(".page").forEach((node) => node.classList.toggle("active", node.id === `page-${target}`));
   $$("#nav button").forEach((node) => node.classList.toggle("active", node.dataset.page === target));
-  const labels = { overview: "Resumen", world: "Mundo", players: "Jugadores", backups: "Backups", network: "Red y VPN", logs: "Registros", settings: "Ajustes" };
+  const labels = {
+    overview: "Resumen",
+    world: "Mundo",
+    players: "Jugadores",
+    leaderboard: "Clasificación",
+    backups: "Backups",
+    network: "Red y VPN",
+    logs: "Registros",
+    settings: "Ajustes",
+  };
   $("#page-title").textContent = labels[target] || "Resumen";
   if (location.hash !== `#${target}`) history.replaceState(null, "", `#${target}`);
   if (target === "players") loadPlayers().catch(showError);
+  if (target === "leaderboard") loadLeaderboard().catch(showError);
   if (target === "settings" && !app.settings) loadSettings().catch(showError);
   if (target === "backups") loadBackups().catch(showError);
   if (target === "network") loadRules().catch(showError);
   if (target === "logs") loadLogs(app.activeLogFilter).catch(showError);
 }
+
 
 function renderStatus(status) {
   app.status = status;
@@ -997,6 +1010,197 @@ function showError(error) {
   toast(error.message || String(error), true);
 }
 
+async function loadLeaderboard(targetWorld) {
+  const select = $("#leaderboard-world-select");
+  const refreshBtn = $("#refresh-leaderboard");
+  if (refreshBtn) refreshBtn.classList.add("rotating");
+
+  try {
+    // Rellenar selector de mundos si está vacío
+    if (select && (select.options.length <= 1 || !select.value)) {
+      try {
+        const worlds = await api("/api/worlds");
+        if (Array.isArray(worlds) && worlds.length) {
+          select.innerHTML = worlds
+            .map((w) => {
+              const name = w.name.replace(/\.sav$/i, "");
+              const isSelected = targetWorld ? name === targetWorld : (w.active || (app.settings?.worldName && name === app.settings.worldName));
+              return `<option value="${escapeHtml(name)}"${isSelected ? " selected" : ""}>${escapeHtml(name)}${w.active ? " (Activo)" : ""}</option>`;
+            })
+            .join("");
+        }
+      } catch {}
+    }
+
+    const world = targetWorld || select?.value || app.settings?.worldName || "Chavito";
+    if (select && world) select.value = world;
+
+    const stats = await api(`/api/worlds/${encodeURIComponent(world)}/stats`);
+    app.currentLeaderboardStats = stats;
+    renderLeaderboard(stats);
+  } catch (err) {
+    const podiumGrid = $("#leaderboard-podium-grid");
+    if (podiumGrid) podiumGrid.innerHTML = `<p class="empty" style="color: var(--red);">No se pudieron cargar las estadísticas: ${escapeHtml(err.message)}</p>`;
+    const playersGrid = $("#leaderboard-players-grid");
+    if (playersGrid) playersGrid.innerHTML = '<p class="empty">Comprueba que el mundo seleccionado tenga un archivo de guardado válido.</p>';
+    showError(err);
+  } finally {
+    if (refreshBtn) {
+      setTimeout(() => refreshBtn.classList.remove("rotating"), 500);
+    }
+  }
+}
+
+function renderLeaderboard(stats) {
+  const worldTag = $("#wrapped-world-tag");
+  if (worldTag) worldTag.textContent = `Mundo: ${stats.worldName}`;
+
+  const podiumGrid = $("#leaderboard-podium-grid");
+  const hl = stats.highlights || {};
+  const cards = [
+    { key: "topXp", gold: true, icon: "👑" },
+    { key: "topPlaytime", gold: true, icon: "⏳" },
+    { key: "topKills", gold: false, icon: "🗡️" },
+    { key: "topArchitect", gold: false, icon: "🏰" },
+    { key: "topExplorer", gold: false, icon: "🧭" },
+    { key: "topScholar", gold: false, icon: "📜" },
+  ];
+
+  if (podiumGrid) {
+    podiumGrid.innerHTML = cards
+      .filter((c) => hl[c.key])
+      .map((c) => {
+        const item = hl[c.key];
+        return `
+          <div class="podium-card ${c.gold ? "gold" : ""}">
+            <div class="podium-card-header">
+              <span class="podium-card-title">${escapeHtml(item.title)}</span>
+              <span class="podium-card-icon">${c.icon}</span>
+            </div>
+            <div class="podium-card-player" title="${escapeHtml(item.player)}">${escapeHtml(item.player)}</div>
+            <div class="podium-card-metric">${escapeHtml(item.metric)}</div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  const countSpan = $("#leaderboard-players-count");
+  if (countSpan) countSpan.textContent = stats.players.length;
+
+  const playersGrid = $("#leaderboard-players-grid");
+  if (!playersGrid) return;
+
+  if (!stats.players || stats.players.length === 0) {
+    playersGrid.innerHTML = '<p class="empty">No se han encontrado aventureros registrados en este guardado.</p>';
+    return;
+  }
+
+  playersGrid.innerHTML = stats.players
+    .map((p) => {
+      const initial = (p.name || "?").charAt(0).toUpperCase();
+      const hcBadge = p.isHardcore
+        ? '<span class="status-badge" style="background: #e96c5622; color: var(--red); border: 1px solid #e96c5644; font-size: 0.65rem;">HARDCORE</span>'
+        : "";
+
+      return `
+        <article class="player-stat-card">
+          <div class="player-stat-card-header">
+            <div class="player-stat-card-user">
+              <div class="player-avatar-circle">${escapeHtml(initial)}</div>
+              <div>
+                <h4 class="player-stat-card-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</h4>
+                <p class="player-stat-card-subtitle">${p.playtimeHours} horas jugadas ${hcBadge}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="player-chips-grid">
+            <div class="stat-chip">
+              <small>Nivel RuneScape</small>
+              <strong class="amber">Niv. ${p.totalLevel}</strong>
+            </div>
+            <div class="stat-chip">
+              <small>Experiencia Total</small>
+              <strong class="accent">${p.totalXp.toLocaleString("es-ES")} XP</strong>
+            </div>
+            <div class="stat-chip">
+              <small>Jefes Derrotados</small>
+              <strong>🗡️ ${p.uniqueKillsCount} únicos</strong>
+            </div>
+            <div class="stat-chip">
+              <small>Bases y Muros</small>
+              <strong>🏰 ${p.structuresBuilt} en mapa</strong>
+            </div>
+            <div class="stat-chip">
+              <small>Santuarios</small>
+              <strong>🧭 ${p.shrinesCount} activados</strong>
+            </div>
+            <div class="stat-chip">
+              <small>Recetas y Diario</small>
+              <strong>📜 ${p.journalCount} descubiertas</strong>
+            </div>
+          </div>
+
+          <div class="player-card-actions">
+            <button class="button tiny light copy-player-discord-btn" data-player="${escapeHtml(p.name)}" type="button">
+              <svg class="action-svg"><use href="#icon-copy"/></svg> Copiar Ficha
+            </button>
+            <button class="button tiny ghost copy-player-ai-btn" data-player="${escapeHtml(p.name)}" type="button" title="Copiar JSON crudo del personaje para prompts de IA">
+              <svg class="action-svg"><use href="#icon-sparkles"/></svg> JSON IA
+            </button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+  // Vincular eventos de copia por jugador
+  $$(".copy-player-discord-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const name = btn.dataset.player;
+      const player = stats.players.find((p) => p.name === name);
+      if (player && player.discordCard) {
+        try {
+          await navigator.clipboard.writeText(player.discordCard);
+          toast(`¡Ficha de "${name}" copiada para Discord!`);
+        } catch (err) {
+          showError(err);
+        }
+      }
+    });
+  });
+
+  $$(".copy-player-ai-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const name = btn.dataset.player;
+      const player = stats.players.find((p) => p.name === name);
+      if (player) {
+        try {
+          const aiPayload = {
+            aventurero: player.name,
+            tiempoJugadoHoras: player.playtimeHours,
+            nivelGeneral: player.totalLevel,
+            experienciaTotal: player.totalXp,
+            jefesCazados: player.uniqueKillsCount,
+            santuariosActivados: player.shrinesCount,
+            estructurasEnMundo: player.structuresBuilt,
+            recetasDiario: player.journalCount,
+            hechizos: player.spellsCount,
+            cofresNombrados: player.namedChests,
+            datosCrudos: player.rawProfile,
+          };
+          await navigator.clipboard.writeText(JSON.stringify(aiPayload, null, 2));
+          toast(`¡JSON de "${name}" copiado! Listo para tus prompts de IA.`);
+        } catch (err) {
+          showError(err);
+        }
+      }
+    });
+  });
+}
+
+
 async function initialize() {
   if (location.search) {
     history.replaceState(null, "", location.pathname + location.hash);
@@ -1293,7 +1497,44 @@ $("#player-modal-form")?.addEventListener("submit", async (event) => {
   }
 });
 
+// Leaderboard & Wrapped actions
+$("#refresh-leaderboard")?.addEventListener("click", () => {
+  const world = $("#leaderboard-world-select")?.value;
+  loadLeaderboard(world);
+});
+
+$("#leaderboard-world-select")?.addEventListener("change", (e) => {
+  loadLeaderboard(e.target.value);
+});
+
+$("#copy-wrapped-discord")?.addEventListener("click", async () => {
+  if (!app.currentLeaderboardStats) return;
+  try {
+    await navigator.clipboard.writeText(app.currentLeaderboardStats.discordSummary);
+    toast("¡Resumen de Dragonwilds Wrapped copiado para Discord!");
+  } catch (err) {
+    showError(err);
+  }
+});
+
+$("#copy-wrapped-json")?.addEventListener("click", async () => {
+  if (!app.currentLeaderboardStats) return;
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(app.currentLeaderboardStats, null, 2));
+    toast("¡JSON crudo copiado! Listo para tus prompts creativos o de IA.");
+  } catch (err) {
+    showError(err);
+  }
+});
+
+$("#download-wrapped-json")?.addEventListener("click", () => {
+  const world = $("#leaderboard-world-select")?.value || app.currentLeaderboardStats?.worldName || "Chavito";
+  const url = `/api/worlds/${encodeURIComponent(world)}/stats/download`;
+  window.open(url, "_blank");
+});
+
 window.addEventListener("resize", () => {
+
   if (app.cpuHistory && app.cpuHistory.length) {
     drawSparkline("cpu-sparkline", app.cpuHistory, "#c084fc", "rgba(192, 132, 252, 0.2)", true);
   }

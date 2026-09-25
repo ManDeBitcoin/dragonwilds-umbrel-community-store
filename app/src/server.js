@@ -329,6 +329,36 @@ async function api(req, res, url) {
     return json(res, 200, { ok: true, ...result });
   }
 
+  const worldStatsMatch = url.pathname.match(/^\/api\/worlds\/([^/]+)\/stats$/);
+  if (req.method === "GET" && worldStatsMatch) {
+    const worldName = decodeURIComponent(worldStatsMatch[1]);
+    try {
+      const stats = await runtime.getWorldStats(worldName);
+      return json(res, 200, stats);
+    } catch (err) {
+      return json(res, 404, { error: err.message });
+    }
+  }
+
+  const worldStatsDownloadMatch = url.pathname.match(/^\/api\/worlds\/([^/]+)\/stats\/download$/);
+  if (req.method === "GET" && worldStatsDownloadMatch) {
+    const worldName = decodeURIComponent(worldStatsDownloadMatch[1]);
+    try {
+      const stats = await runtime.getWorldStats(worldName);
+      const content = Buffer.from(JSON.stringify(stats, null, 2), "utf8");
+      res.writeHead(200, {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": content.length,
+        "content-disposition": `attachment; filename="dragonwilds-wrapped-${encodeURIComponent(stats.worldName)}.json"`,
+        "cache-control": "no-store",
+      });
+      return res.end(content);
+    } catch (err) {
+      return json(res, 404, { error: err.message });
+    }
+  }
+
+
   const worldActivateMatch = url.pathname.match(/^\/api\/worlds\/([^/]+)\/activate$/);
   if (req.method === "POST" && worldActivateMatch) {
     if (!requireMutation(req, res)) return;
