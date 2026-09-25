@@ -534,12 +534,30 @@
           <article class="panel dark-panel" style="margin-top: 1rem; padding: 1rem 1.25rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
               <div>
-                <h4 style="margin: 0; font-size: 0.95rem; font-family: 'Cinzel', serif;">📢 Mensaje Global de Servidor (Broadcast)</h4>
-                <p class="muted small" style="margin: 0.15rem 0 0 0;">Envía un aviso o anuncio en pantalla a todos los jugadores conectados (al estilo Minecraft o comando <code>/Broadcast</code>).</p>
+                <h4 style="margin: 0; font-size: 0.95rem; font-family: 'Cinzel', serif; display: flex; align-items: center; gap: 0.4rem;">
+                  <svg class="action-svg"><use href="#icon-sword"/></svg> Mensaje Global de Servidor (Broadcast)
+                </h4>
+                <p class="muted small" style="margin: 0.15rem 0 0 0;">Envía un anuncio en pantalla a todos los jugadores conectados. Puedes seleccionar una plantilla predeterminada o escribir un mensaje propio.</p>
               </div>
             </div>
+
+            <div style="margin-bottom: 0.6rem;">
+              <label for="broadcast-preset" class="muted small" style="display: block; margin-bottom: 0.3rem;">Plantillas de mensajes predeterminados:</label>
+              <select id="broadcast-preset" style="width: 100%; padding: 0.45rem 0.65rem; border-radius: 6px; background: #0c120e; border: 1px solid var(--line); color: var(--text); font-size: 0.85rem;">
+                <option value="">-- Seleccionar mensaje predeterminado --</option>
+                <option value="Convocatoria oficial: Se solicita la presencia de todos los aventureros disponibles en la zona designada con su mejor armadura y arma para la sesion de fotos del reino.">Sesion de fotos: Convocatoria con mejor armadura y arma</option>
+                <option value="Aviso del servidor: Reinicio programado en 10 minutos. Por favor busquen un lugar seguro y guarden sus objetos.">Mantenimiento: Reinicio en 10 minutos</option>
+                <option value="Aviso del servidor: Reinicio inminente en 2 minutos. Desconectense en una zona protegida.">Mantenimiento: Reinicio inminente (2 minutos)</option>
+                <option value="Aviso del servidor: Creando copia de seguridad del mundo. Podria experimentarse una breve pausa.">Respaldo: Copia de seguridad del mundo</option>
+                <option value="Llamado a las armas: Expedicion y caceria grupal a punto de comenzar. Reunanse en el punto de encuentro.">Evento: Expedicion y caceria grupal</option>
+                <option value="Bienvenidos a Dragonwilds. Los invitamos a explorar, construir y cooperar con el resto de la comunidad.">Comunidad: Bienvenida oficial al servidor</option>
+                <option value="Recordatorio de normas: Respeten las construcciones de otros jugadores y mantengan la buena convivencia.">Normas: Respeto a construcciones y convivencia</option>
+                <option value="Aviso comercial: Puesto de intercambio abierto en el pueblo central. Traigan sus recursos para comerciar.">Comercio: Puesto de intercambio abierto</option>
+              </select>
+            </div>
+
             <form id="broadcast-form" style="display: flex; gap: 0.5rem;">
-              <input id="broadcast-input" type="text" placeholder="Ej: ¡El servidor se reiniciará en 10 minutos! Guarda tus objetos." style="flex: 1; padding: 0.5rem 0.75rem; border-radius: 6px; background: #0c120e; border: 1px solid var(--line); color: var(--text);" required />
+              <input id="broadcast-input" type="text" placeholder="Escribe el mensaje o selecciona una plantilla arriba..." style="flex: 1; padding: 0.5rem 0.75rem; border-radius: 6px; background: #0c120e; border: 1px solid var(--line); color: var(--text);" required />
               <button class="button primary tiny" type="submit" style="white-space: nowrap;">
                 <svg class="action-svg"><use href="#icon-sword"/></svg> Enviar Anuncio
               </button>
