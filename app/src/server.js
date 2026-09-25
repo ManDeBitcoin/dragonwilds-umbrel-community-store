@@ -23,7 +23,7 @@ const runtime = new Runtime();
 const sessions = new Map();
 const loginAttempts = new Map();
 let localAuth = null;
-const APP_VERSION = "0.1.11";
+const APP_VERSION = "0.1.12";
 const BUILD_ID = `${APP_VERSION}-${Date.now().toString(36)}`;
 
 const mimeTypes = {
@@ -501,19 +501,6 @@ async function api(req, res, url) {
       "cache-control": "no-store",
     });
     return res.end(text);
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/server/broadcast") {
-    if (!requireMutation(req, res)) return;
-    const body = await bodyJson(req);
-    const message = (body?.message || "").trim();
-    if (!message) return json(res, 400, { error: "El mensaje no puede estar vacío." });
-    try {
-      runtime.sendCommand(`Broadcast ${message}`);
-      return json(res, 200, { ok: true, message: `Comando enviado al servidor: Broadcast ${message}` });
-    } catch (err) {
-      return json(res, 400, { error: err.message });
-    }
   }
 
   return json(res, 404, { error: "Ruta API no encontrada." });

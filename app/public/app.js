@@ -1553,36 +1553,6 @@ $("#clear-log-view")?.addEventListener("click", () => {
   toast("Vista de registros limpiada.");
 });
 
-// Seleccionar plantilla predeterminada de anuncio
-$("#broadcast-preset")?.addEventListener("change", (e) => {
-  const input = $("#broadcast-input");
-  if (input && e.target.value) {
-    input.value = e.target.value;
-    input.focus();
-  }
-});
-
-// Enviar anuncio global (Broadcast) al servidor
-$("#broadcast-form")?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const input = $("#broadcast-input");
-  const preset = $("#broadcast-preset");
-  const msg = input?.value?.trim();
-  if (!msg) return;
-  try {
-    toast(`Enviando anuncio global: "${msg}"…`);
-    const res = await api("/api/server/broadcast", {
-      method: "POST",
-      body: JSON.stringify({ message: msg }),
-    });
-    toast(res.message || "Anuncio enviado al servidor correctamente.");
-    if (input) input.value = "";
-    if (preset) preset.value = "";
-  } catch (err) {
-    showError(err);
-  }
-});
-
 // Players modal and actions
 $("#refresh-players")?.addEventListener("click", () => loadPlayers());
 

@@ -669,7 +669,7 @@ export class Runtime extends EventEmitter {
       cwd: process.env.MOCK_GAME === "1" ? process.cwd() : "/home/steam",
       uid: process.env.MOCK_GAME === "1" ? undefined : GAME_UID,
       gid: process.env.MOCK_GAME === "1" ? undefined : GAME_GID,
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
     this.startedAt = new Date().toISOString();
     this.addLog("world", `Servidor arrancando con el mundo: [${this.settings.worldName || "Chavito"}]`);
@@ -741,16 +741,6 @@ export class Runtime extends EventEmitter {
     await this.start(options);
   }
 
-  sendCommand(commandText) {
-    if (!this.child || !this.child.stdin || this.serverState !== "running") {
-      throw new Error("El servidor no está en ejecución.");
-    }
-    const clean = String(commandText || "").trim();
-    if (!clean) throw new Error("El comando no puede estar vacío.");
-    this.child.stdin.write(`${clean}\n`);
-    this.addLog("server", `[CONSOLA_ADMIN] ${clean}`);
-    return true;
-  }
 
   async withStoppedServer(task, restart = true) {
     const wasRunning = Boolean(this.child) || this.desiredRunning;

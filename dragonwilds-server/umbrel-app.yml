@@ -2,7 +2,7 @@ manifestVersion: 1
 id: dragonwilds-server
 category: networking
 name: RuneScape Dragonwilds Server
-version: "0.1.11"
+version: "0.1.12"
 tagline: Tu mundo persistente, administrado desde Umbrel
 description: >-
   Ejecuta y administra un servidor dedicado de RuneScape: Dragonwilds desde una
@@ -20,11 +20,10 @@ description: >-
   runtime arm64. El modo WireGuard necesita `/dev/net/tun` y capacidades de red
   dentro del contenedor; no se monta el socket Docker del host.
 releaseNotes: >-
-  v0.1.11: Añadida la función de Mensajes Globales de Servidor (Broadcast al estilo Minecraft)
-  desde el panel de control con plantillas predeterminadas (convocatorias, sesiones de fotos,
-  mantenimiento y eventos) y sin emojis. Corrección completa para el visor de registros en la
-  categoría Mundo con espejado de eventos de Unreal Engine 5 (LogWorldPartition, guardados
-  automáticos), y dinamismo total en las clasificaciones reconociendo a todos los jugadores.
+  v0.1.12: Corrección completa para el visor de registros en la categoría Mundo con espejado
+  de eventos de Unreal Engine 5 (LogWorldPartition, guardados automáticos y carga de celdas),
+  dinamismo total en las clasificaciones reconociendo a todos los jugadores, y depuración
+  de la interfaz retirando controles no soportados nativamente por el ejecutable de Jagex.
 
 
 developer: Dragonwilds Community
