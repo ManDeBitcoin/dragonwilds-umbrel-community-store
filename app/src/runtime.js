@@ -31,6 +31,7 @@ import {
   CROSSPLAY_LABELS,
 } from "./world-editor.js";
 import { extractWorldStatsFromFile } from "./stats-extractor.js";
+import { PlayerDatabase } from "./player-database.js";
 
 const GAME_UID = Number(process.env.GAME_UID || 1000);
 const GAME_GID = Number(process.env.GAME_GID || 1000);
@@ -349,6 +350,8 @@ export class Runtime extends EventEmitter {
     };
     this.onlinePlayers = new Map();
     this.knownPlayerNames = new Map();
+    this.playerDatabase = new PlayerDatabase(join(DATA_DIR, "player-database.json"));
+    this.statsSyncTimer = null;
     this.operation = Promise.resolve();
     this.backupScheduleTimer = null;
     this.vpnWatchdogTimer = null;
@@ -423,6 +426,7 @@ export class Runtime extends EventEmitter {
     this.serverMessage = this.settings.configured
       ? "Servidor detenido (listo para arrancar)"
       : "Sin configurar";
+    await this.playerDatabase.load().catch(() => {});
     this.addLog("world", `Gestor de mundos listo. Mundo activo configurado: [${this.settings.worldName || "Chavito"}]`);
   }
 
@@ -492,6 +496,14 @@ export class Runtime extends EventEmitter {
         userName,
         joinedAt: new Date().toISOString(),
       });
+      if (this.playerDatabase) {
+        const worldName = this.settings.worldName || "Chavito";
+        this.playerDatabase.updatePlayerConnection(worldName, userName, {
+          userId,
+          connected: true,
+          timestamp: new Date().toISOString(),
+        });
+      }
       this.emit("players", {
         onlinePlayers: Array.from(this.onlinePlayers.values()),
         playerCount: this.onlinePlayers.size,
@@ -563,6 +575,14 @@ export class Runtime extends EventEmitter {
       }
 
       if (changed) {
+        if (this.playerDatabase && resolvedName) {
+          const worldName = this.settings.worldName || "Chavito";
+          this.playerDatabase.updatePlayerConnection(worldName, resolvedName, {
+            userId: cleanTargetId || "",
+            connected: false,
+            timestamp: new Date().toISOString(),
+          });
+        }
         this.emit("players", {
           onlinePlayers: Array.from(this.onlinePlayers.values()),
           playerCount: this.onlinePlayers.size,
@@ -570,7 +590,33 @@ export class Runtime extends EventEmitter {
       }
     }
 
+    // Detección reactiva de guardados del servidor o desconexiones para consolidar base de datos
+    const isSaveOrDisconnect = /SaveGame\(\) : Starting save|PlayerStateSave result\[true\]|ClientRequestDisconnect/i.test(safe);
+    if (isSaveOrDisconnect) {
+      this.schedulePlayerStatsSync();
+    }
+
     this.emit("log", entry);
+  }
+
+  schedulePlayerStatsSync() {
+    if (this.statsSyncTimer) clearTimeout(this.statsSyncTimer);
+    this.statsSyncTimer = setTimeout(async () => {
+      try {
+        const worldName = this.settings.worldName || "Chavito";
+        const path = await this.findWorldPath(worldName).catch(() => null);
+        if (path && (await exists(path))) {
+          const onlineNames = new Set(
+            Array.from(this.onlinePlayers.values()).map((p) => p.userName)
+          );
+          await extractWorldStatsFromFile(path, {
+            playerDatabase: this.playerDatabase,
+            onlinePlayers: onlineNames,
+          });
+          this.emit("stats-updated", { worldName });
+        }
+      } catch {}
+    }, 2500);
   }
 
   getLogs(source = "all", limit = 200) {
@@ -977,7 +1023,13 @@ export class Runtime extends EventEmitter {
     const clean = basename(worldName || this.settings.worldName || "Chavito").replace(/\.(sav|backup)$/i, "");
     const path = await this.findWorldPath(clean);
     if (!(await exists(path))) throw new Error(`El mundo "${clean}" no existe.`);
-    return await extractWorldStatsFromFile(path);
+    const onlineNames = new Set(
+      Array.from(this.onlinePlayers.values()).map((p) => p.userName)
+    );
+    return await extractWorldStatsFromFile(path, {
+      playerDatabase: this.playerDatabase,
+      onlinePlayers: onlineNames,
+    });
   }
 
 

@@ -1,0 +1,153 @@
+{
+  "version": 1,
+  "worlds": {
+    "Chavito": {
+      "players": {
+        "Matty": {
+          "name": "Matty",
+          "guid": "000293c9dc02469eb0959c6b74781ebd",
+          "platform": "PC / Epic",
+          "totalXp": 137800,
+          "totalLevel": 294,
+          "playtimeSeconds": 97920,
+          "playtimeHours": 27.2,
+          "uniqueKillsCount": 26,
+          "structuresBuilt": 67,
+          "shrinesCount": 5,
+          "journalCount": 330,
+          "spellsCount": 20,
+          "firstSeen": "2026-09-18T21:08:16.000Z",
+          "lastSeen": "2026-09-20T21:44:00.000Z",
+          "isOnline": false,
+          "registeredOnly": false
+        },
+        "ChamapTV": {
+          "name": "ChamapTV",
+          "guid": "00025be9182947128e2c6f899f51e1ba",
+          "platform": "PC / Steam",
+          "totalXp": 52964,
+          "totalLevel": 201,
+          "playtimeSeconds": 58320,
+          "playtimeHours": 16.2,
+          "uniqueKillsCount": 22,
+          "structuresBuilt": 18,
+          "firstSeen": "2026-09-18T22:10:49.000Z",
+          "lastSeen": "2026-09-21T21:50:46.000Z",
+          "isOnline": false,
+          "registeredOnly": false
+        },
+        "Bogard": {
+          "name": "Bogard",
+          "guid": "0002bd4e6d3043d2b4c24f9b074a5d92",
+          "platform": "PC / Epic",
+          "totalXp": 64109,
+          "totalLevel": 232,
+          "playtimeSeconds": 84960,
+          "playtimeHours": 23.6,
+          "uniqueKillsCount": 22,
+          "structuresBuilt": 24,
+          "shrinesCount": 3,
+          "journalCount": 383,
+          "spellsCount": 20,
+          "firstSeen": "2026-09-20T21:02:54.000Z",
+          "lastSeen": "2026-09-21T09:03:18.000Z",
+          "isOnline": false,
+          "registeredOnly": false
+        },
+        "ZOILA qk": {
+          "name": "ZOILA qk",
+          "guid": "0002d8eb1f3b4bf3bd3210b9dea9c490",
+          "platform": "PC / Epic",
+          "totalXp": 8825,
+          "totalLevel": 68,
+          "playtimeSeconds": 10080,
+          "playtimeHours": 2.8,
+          "uniqueKillsCount": 7,
+          "structuresBuilt": 15,
+          "shrinesCount": 7,
+          "journalCount": 321,
+          "spellsCount": 11,
+          "firstSeen": "2026-09-20T18:07:46.000Z",
+          "lastSeen": "2026-09-21T05:50:34.000Z",
+          "isOnline": false,
+          "registeredOnly": false
+        },
+        "Snaker": {
+          "name": "Snaker",
+          "guid": "000299e8be034a28a0e01be52fc967c8",
+          "platform": "PS5",
+          "totalXp": 0,
+          "totalLevel": 1,
+          "playtimeSeconds": 1380,
+          "playtimeHours": 0.4,
+          "uniqueKillsCount": 0,
+          "structuresBuilt": 0,
+          "firstSeen": "2026-09-19T04:43:20.000Z",
+          "lastSeen": "2026-09-19T05:06:01.000Z",
+          "isOnline": false,
+          "registeredOnly": false
+        },
+        "ObiwanPenobi__": {
+          "name": "ObiwanPenobi__",
+          "guid": "0002d71d75c244468d4a7438ac03da03",
+          "platform": "PC / Epic",
+          "totalXp": 0,
+          "totalLevel": 1,
+          "playtimeSeconds": 1680,
+          "playtimeHours": 0.5,
+          "uniqueKillsCount": 0,
+          "structuresBuilt": 0,
+          "firstSeen": "2026-09-20T18:08:28.000Z",
+          "lastSeen": "2026-09-20T18:36:27.000Z",
+          "isOnline": false,
+          "registeredOnly": false
+        }
+      },
+      "actionLog": [
+        {
+          "id": "act-1",
+          "timestamp": "2026-09-21T21:50:46.000Z",
+          "player": "ChamapTV",
+          "action": "Se desconectó del servidor (estado guardado)",
+          "type": "disconnection"
+        },
+        {
+          "id": "act-2",
+          "timestamp": "2026-09-21T09:03:18.000Z",
+          "player": "Bogard",
+          "action": "Se desconectó del servidor tras sesión de juego",
+          "type": "disconnection"
+        },
+        {
+          "id": "act-3",
+          "timestamp": "2026-09-21T05:50:34.000Z",
+          "player": "ZOILA qk",
+          "action": "Se desconectó del servidor tras activar santuarios",
+          "type": "disconnection"
+        },
+        {
+          "id": "act-4",
+          "timestamp": "2026-09-20T21:44:00.000Z",
+          "player": "Matty",
+          "action": "Sesión activa en el reino de Chavito (Nivel 294, 137.800 XP)",
+          "type": "level_up"
+        },
+        {
+          "id": "act-5",
+          "timestamp": "2026-09-20T18:36:27.000Z",
+          "player": "ObiwanPenobi__",
+          "action": "Se desconectó del servidor tras sesión de exploración",
+          "type": "disconnection"
+        },
+        {
+          "id": "act-6",
+          "timestamp": "2026-09-19T05:06:01.000Z",
+          "player": "Snaker",
+          "action": "Se desconectó desde PlayStation (estado guardado)",
+          "type": "disconnection"
+        }
+      ],
+      "updatedAt": "2026-09-21T21:50:46.000Z"
+    }
+  }
+}

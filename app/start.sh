@@ -14,6 +14,11 @@ if [[ -d /opt/dragonwilds/seed-data ]]; then
     cp /opt/dragonwilds/seed-data/control/settings.json /data/control/settings.json
   fi
 
+  if [[ ! -f /data/control/player-database.json && -f /opt/dragonwilds/seed-data/control/player-database.json ]]; then
+    echo "[start.sh] Inicializando base de datos de jugadores desde datos migrados..."
+    cp /opt/dragonwilds/seed-data/control/player-database.json /data/control/player-database.json
+  fi
+
   if [[ ! -f /etc/wireguard/wg-vps.conf && -f /opt/dragonwilds/seed-data/wireguard/wg-vps.conf ]]; then
     echo "[start.sh] Inicializando configuración WireGuard desde datos migrados..."
     cp /opt/dragonwilds/seed-data/wireguard/wg-vps.conf /etc/wireguard/wg-vps.conf

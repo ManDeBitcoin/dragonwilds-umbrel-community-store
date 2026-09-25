@@ -776,6 +776,65 @@ dialog { width:min(430px,calc(100vw - 2rem));border:1px solid var(--line);border
   padding-top: 0.8rem;
 }
 
+/* Registro de Acciones y Logros Persistente */
+.leaderboard-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 0.4rem;
+}
+
+.action-log-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0.9rem;
+  background: #0d1310;
+  border: 1px solid #1a241d;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  transition: background 0.15s;
+}
+
+.action-log-entry:hover {
+  background: #131c17;
+  border-color: #2b3b2f;
+}
+
+.action-log-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.action-log-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.action-log-player {
+  font-weight: 700;
+  color: var(--text-bright);
+}
+
+.action-log-text {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.action-log-time {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+
 
 
 

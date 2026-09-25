@@ -23,7 +23,7 @@ const runtime = new Runtime();
 const sessions = new Map();
 const loginAttempts = new Map();
 let localAuth = null;
-const APP_VERSION = "0.1.14";
+const APP_VERSION = "0.1.15";
 const BUILD_ID = `${APP_VERSION}-${Date.now().toString(36)}`;
 
 const mimeTypes = {
@@ -338,6 +338,13 @@ async function api(req, res, url) {
     } catch (err) {
       return json(res, 404, { error: err.message });
     }
+  }
+
+  const worldActionsMatch = url.pathname.match(/^\/api\/worlds\/([^/]+)\/actions$/);
+  if (req.method === "GET" && worldActionsMatch) {
+    const worldName = decodeURIComponent(worldActionsMatch[1]);
+    const actions = runtime.playerDatabase ? runtime.playerDatabase.getActionLog(worldName) : [];
+    return json(res, 200, { worldName, actions });
   }
 
   const worldStatsDownloadMatch = url.pathname.match(/^\/api\/worlds\/([^/]+)\/stats\/download$/);

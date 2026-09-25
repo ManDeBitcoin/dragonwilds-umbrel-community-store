@@ -60,6 +60,45 @@ function toast(message, error = false) {
   toast.timer = setTimeout(() => (node.className = "toast"), 3600);
 }
 
+async function copyToClipboard(text) {
+  const content = typeof text === "string" ? text : String(text ?? "");
+
+  // 1. Si el contexto es seguro y navigator.clipboard existe, intentar la API moderna
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(content);
+      return true;
+    } catch {
+      // Continuar al fallback si el navegador rechaza por permisos o foco
+    }
+  }
+
+  // 2. Fallback universal para HTTP en red local (umbrel.local) y todos los navegadores
+  const textarea = document.createElement("textarea");
+  textarea.value = content;
+  textarea.style.position = "fixed";
+  textarea.style.top = "-9999px";
+  textarea.style.left = "-9999px";
+  textarea.style.opacity = "0";
+  textarea.setAttribute("readonly", "");
+  document.body.appendChild(textarea);
+
+  try {
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    const successful = document.execCommand("copy");
+    if (!successful) {
+      throw new Error("El navegador no permitió copiar el contenido.");
+    }
+    return true;
+  } catch (err) {
+    throw new Error(`No se pudo copiar al portapapeles: ${err.message}`);
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
 function showAuth() {
   clearInterval(app.poller);
   stopFastPolling();
@@ -1264,6 +1303,10 @@ function renderLeaderboard(stats) {
   playersGrid.innerHTML = stats.players
     .map((p) => {
       const initial = (p.name || "?").charAt(0).toUpperCase();
+      const onlineBadge = p.isOnline
+        ? '<span class="status-badge online" style="font-size: 0.65rem; padding: 0.15rem 0.45rem;">🟢 En línea</span>'
+        : '<span class="status-badge" style="font-size: 0.65rem; padding: 0.15rem 0.45rem; background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid rgba(255,255,255,0.12);">⚪ Desconectado</span>';
+
       const hcBadge = p.isHardcore
         ? '<span class="status-badge" style="background: #e96c5622; color: var(--red); border: 1px solid #e96c5644; font-size: 0.65rem;">HARDCORE</span>'
         : "";
@@ -1279,7 +1322,23 @@ function renderLeaderboard(stats) {
         ? `<div class="player-extra-tags">${p.titleBadge.tags.map((t) => `<span class="player-tag-pill">${escapeHtml(t)}</span>`).join("")}</div>`
         : "";
 
-      const playtimeLabel = p.registeredOnly ? "Cuenta registrada en el reino" : `${p.playtimeHours} horas jugadas`;
+      const playtimeLabel = p.registeredOnly
+        ? "Cuenta registrada en el reino"
+        : `${p.playtimeHours} horas jugadas • Guardado en base de datos`;
+
+      const lastSeenStr = p.lastSeen
+        ? new Date(p.lastSeen).toLocaleString("es-ES", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "Sin registro previo";
+
+      const lastSeenLabel = p.isOnline
+        ? '<span style="color: var(--green); font-weight: 600;">● Conectado ahora</span>'
+        : `Última conexión: ${escapeHtml(lastSeenStr)}`;
 
       return `
         <article class="player-stat-card">
@@ -1288,7 +1347,11 @@ function renderLeaderboard(stats) {
               <div class="player-avatar-circle">${escapeHtml(initial)}</div>
               <div>
                 <h4 class="player-stat-card-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</h4>
-                <p class="player-stat-card-subtitle">${playtimeLabel} ${hcBadge} ${regBadge}</p>
+                <p class="player-stat-card-subtitle" style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
+                  ${onlineBadge} ${hcBadge} ${regBadge}
+                </p>
+                <small class="muted" style="display: block; font-size: 0.72rem; margin-top: 0.2rem;">${playtimeLabel}</small>
+                <small style="display: block; font-size: 0.72rem; color: #8da394; margin-top: 0.15rem;">🕒 ${lastSeenLabel}</small>
                 ${titleBadge}
                 ${extraTags}
               </div>
@@ -1342,14 +1405,60 @@ function renderLeaderboard(stats) {
     })
     .join("");
 
-  // Vincular eventos de copia por jugador
+  // Renderizar registro limpio de acciones y logros persistente
+  const actionsList = $("#leaderboard-actions-list");
+  if (actionsList) {
+    const actions = Array.isArray(stats.actionLog) ? stats.actionLog : [];
+    if (actions.length === 0) {
+      actionsList.innerHTML = '<p class="empty">Aún no hay acciones registradas en este mundo. Los hitos aparecerán conforme los aventureros jueguen.</p>';
+    } else {
+      const iconForType = (type) => {
+        switch (type) {
+          case "level_up": return "⭐";
+          case "kill": return "🗡️";
+          case "shrine": return "🧭";
+          case "builder": return "🏰";
+          case "join": return "🛡️";
+          default: return "📜";
+        }
+      };
+
+      actionsList.innerHTML = actions
+        .slice(0, 50)
+        .map((act) => {
+          const timeStr = act.timestamp ? new Date(act.timestamp).toLocaleString("es-ES", {
+            day: "2-digit",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          }) : "";
+          const icon = iconForType(act.type);
+
+          return `
+            <div class="action-log-entry">
+              <div class="action-log-left">
+                <span class="action-log-icon">${icon}</span>
+                <div>
+                  <span class="action-log-player">${escapeHtml(act.player)}</span>:
+                  <span class="action-log-text">${escapeHtml(act.action)}</span>
+                </div>
+              </div>
+              <span class="action-log-time">${timeStr}</span>
+            </div>
+          `;
+        })
+        .join("");
+    }
+  }
+
+  // Vincular eventos de copia por jugador con fallback universal
   $$(".copy-player-discord-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const name = btn.dataset.player;
       const player = stats.players.find((p) => p.name === name);
       if (player && player.discordCard) {
         try {
-          await navigator.clipboard.writeText(player.discordCard);
+          await copyToClipboard(player.discordCard);
           toast(`¡Ficha de "${name}" copiada para Discord!`);
         } catch (err) {
           showError(err);
@@ -1366,6 +1475,7 @@ function renderLeaderboard(stats) {
         try {
           const aiPayload = {
             aventurero: player.name,
+            estado: player.isOnline ? "En línea" : "Desconectado",
             tiempoJugadoHoras: player.playtimeHours,
             nivelGeneral: player.totalLevel,
             experienciaTotal: player.totalXp,
@@ -1377,7 +1487,7 @@ function renderLeaderboard(stats) {
             cofresNombrados: player.namedChests,
             datosCrudos: player.rawProfile,
           };
-          await navigator.clipboard.writeText(JSON.stringify(aiPayload, null, 2));
+          await copyToClipboard(JSON.stringify(aiPayload, null, 2));
           toast(`¡JSON de "${name}" copiado! Listo para tus prompts de IA.`);
         } catch (err) {
           showError(err);
@@ -1503,7 +1613,7 @@ $("#vpn-stop").addEventListener("click", async () => {
 $("#copy-rules").addEventListener("click", async () => {
   try {
     if (!app.rules) await loadRules();
-    await navigator.clipboard.writeText(`WG_POST_UP=${app.rules.postUp}\n\nWG_POST_DOWN=${app.rules.postDown}`);
+    await copyToClipboard(`WG_POST_UP=${app.rules.postUp}\n\nWG_POST_DOWN=${app.rules.postDown}`);
     toast("Reglas copiadas al portapapeles.");
   } catch (error) { showError(error); }
 });
@@ -1711,7 +1821,7 @@ $("#leaderboard-world-select")?.addEventListener("change", (e) => {
 $("#copy-wrapped-discord")?.addEventListener("click", async () => {
   if (!app.currentLeaderboardStats) return;
   try {
-    await navigator.clipboard.writeText(app.currentLeaderboardStats.discordSummary);
+    await copyToClipboard(app.currentLeaderboardStats.discordSummary);
     toast("¡Resumen de Dragonwilds Wrapped copiado para Discord!");
   } catch (err) {
     showError(err);
@@ -1721,7 +1831,7 @@ $("#copy-wrapped-discord")?.addEventListener("click", async () => {
 $("#copy-wrapped-json")?.addEventListener("click", async () => {
   if (!app.currentLeaderboardStats) return;
   try {
-    await navigator.clipboard.writeText(JSON.stringify(app.currentLeaderboardStats, null, 2));
+    await copyToClipboard(JSON.stringify(app.currentLeaderboardStats, null, 2));
     toast("¡JSON crudo copiado! Listo para tus prompts creativos o de IA.");
   } catch (err) {
     showError(err);

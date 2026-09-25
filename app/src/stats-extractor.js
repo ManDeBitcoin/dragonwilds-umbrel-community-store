@@ -223,8 +223,11 @@ export function processPlayerProfile(raw, worldStructures = {}) {
     uniqueKillsCount: Array.isArray(prog.KilledOnceAIs) ? prog.KilledOnceAIs.length : 0,
     uniqueKills: prog.KilledOnceAIs || [],
     shrinesCount: Array.isArray(prog.ShrinesUnlocked) ? prog.ShrinesUnlocked.length : 0,
+    shrinesUnlocked: Array.isArray(prog.ShrinesUnlocked) ? prog.ShrinesUnlocked : [],
     spellsCount: Array.isArray(prog.SpellsUnlocked) ? prog.SpellsUnlocked.length : 0,
+    spellsUnlocked: Array.isArray(prog.SpellsUnlocked) ? prog.SpellsUnlocked : [],
     journalCount: Array.isArray(journal.UnlockedEntries) ? journal.UnlockedEntries.length : 0,
+    journalEntries: Array.isArray(journal.UnlockedEntries) ? journal.UnlockedEntries : [],
     buildingPiecesCount: Array.isArray(prog.BuildingPiecesNew) ? prog.BuildingPiecesNew.length : 0,
     structuresBuilt: structuresInfo.structuresCount,
     namedChests: structuresInfo.namedChests,
@@ -686,10 +689,7 @@ export function extractWorldStatsFromBuffer(buffer, worldName = "Mundo") {
   return extractWorldStatsFromBuffers([buffer], worldName);
 }
 
-/**
- * Lee un archivo .sav o .backup y busca posibles backups hermanos en la misma carpeta para extraer todas las estadísticas.
- */
-export async function extractWorldStatsFromFile(filePath) {
+export async function extractWorldStatsFromFile(filePath, options = {}) {
   const buffers = [];
   const visitedPaths = new Set();
 
@@ -741,7 +741,41 @@ export async function extractWorldStatsFromFile(filePath) {
     }
   }
 
-  return extractWorldStatsFromBuffers(buffers, cleanBase);
+  let stats = extractWorldStatsFromBuffers(buffers, cleanBase);
+
+  // 3. Integración con base de datos persistente (evita ceros en jugadores desconectados y registra acciones)
+  if (options && options.playerDatabase) {
+    const { players: mergedPlayers, actionLog } = await options.playerDatabase.mergeWorldStats(
+      cleanBase,
+      stats.players,
+      options.onlinePlayers
+    );
+
+    // Reordenar aventureros consolidados por experiencia total y tiempo jugado
+    mergedPlayers.sort((a, b) => {
+      if (b.totalXp !== a.totalXp) return b.totalXp - a.totalXp;
+      if (b.playtimeHours !== a.playtimeHours) return b.playtimeHours - a.playtimeHours;
+      return b.structuresBuilt - a.structuresBuilt;
+    });
+
+    const highlights = calculateHighlights(mergedPlayers);
+
+    for (const p of mergedPlayers) {
+      p.titleBadge = assignPlayerHonorificTitle(p, highlights);
+      p.discordCard = generatePlayerDiscordCard(p, cleanBase);
+    }
+
+    stats = {
+      ...stats,
+      totalPlayers: mergedPlayers.length,
+      highlights,
+      players: mergedPlayers,
+      actionLog: actionLog || [],
+      discordSummary: generateDiscordSummary({ worldName: cleanBase, players: mergedPlayers, highlights }),
+    };
+  }
+
+  return stats;
 }
 
 
